@@ -1,6 +1,7 @@
 @import "tailwindcss";
 
+/* Colori di base del mockup approvato */
 body {
-  background: #f5f6f8;
-  color: #1f2937;
+  background: #f1f5f9; /* slate-100 */
+  color: #0f172a; /* slate-900 */
 }

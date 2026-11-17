@@ -1,32 +1,47 @@
 "use client";
+// Menu principale. Su computer è una colonna a sinistra, su telefono una barra in alto.
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { esci } from "@/lib/azioni-accesso";
+import { ETICHETTE_RUOLO, type Ruolo } from "@/lib/ruoli";
 
-const voci = [
-  { href: "/", etichetta: "Dashboard" },
-  { href: "/preventivi", etichetta: "Preventivi" },
-  { href: "/produzione", etichetta: "Produzione" },
-  { href: "/timbrature", etichetta: "Timbrature" },
-  { href: "/anagrafiche", etichetta: "Anagrafiche" },
-];
+type Props = {
+  voci: { href: string; etichetta: string }[];
+  nome: string;
+  ruolo: Ruolo;
+};
 
-export default function BarraLaterale() {
+export default function BarraLaterale({ voci, nome, ruolo }: Props) {
   const percorso = usePathname();
 
   return (
-    <nav className="w-56 shrink-0 bg-slate-900 text-slate-100 min-h-screen p-4">
-      <div className="text-lg font-semibold mb-6 px-2">Gestionale</div>
-      <ul className="space-y-1">
+    <nav
+      aria-label="Menu principale"
+      className="flex flex-col gap-3 bg-slate-900 p-3 md:sticky md:top-0 md:h-screen md:w-60 md:shrink-0 md:gap-1 md:px-4 md:py-6"
+    >
+      <div className="flex items-center justify-between md:block">
+        <div className="px-3 text-xl font-bold text-white md:pb-6">
+          Gestionale<span className="text-blue-400">.</span>
+        </div>
+        {/* su telefono il pulsante Esci sta in alto a destra */}
+        <form action={esci} className="md:hidden">
+          <button className="rounded-lg px-3 py-2 text-sm font-medium text-slate-300 hover:bg-slate-800 hover:text-white">
+            Esci
+          </button>
+        </form>
+      </div>
+
+      <ul className="-mx-1 flex gap-1 overflow-x-auto px-1 md:mx-0 md:flex-col md:overflow-visible md:px-0">
         {voci.map((voce) => {
-          const attiva =
-            voce.href === "/" ? percorso === "/" : percorso.startsWith(voce.href);
+          const attiva = voce.href === "/" ? percorso === "/" : percorso.startsWith(voce.href);
           return (
-            <li key={voce.href}>
+            <li key={voce.href} className="shrink-0">
               <Link
                 href={voce.href}
-                className={`block rounded-md px-3 py-2 text-sm ${
-                  attiva ? "bg-slate-700 font-medium" : "hover:bg-slate-800"
+                aria-current={attiva ? "page" : undefined}
+                className={`block rounded-lg px-3 py-2.5 text-sm font-medium whitespace-nowrap ${
+                  attiva ? "bg-blue-600 text-white" : "text-slate-300 hover:bg-slate-800 hover:text-white"
                 }`}
               >
                 {voce.etichetta}
@@ -35,6 +50,17 @@ export default function BarraLaterale() {
           );
         })}
       </ul>
+
+      <div className="mt-auto hidden rounded-lg bg-slate-800 p-3 text-sm text-slate-300 md:block">
+        Connesso come
+        <div className="truncate font-semibold text-white" title={nome}>{nome}</div>
+        <div className="text-xs">{ETICHETTE_RUOLO[ruolo]}</div>
+        <form action={esci} className="mt-3">
+          <button className="w-full rounded-md border border-slate-600 px-3 py-1.5 text-sm font-medium text-slate-200 hover:bg-slate-700">
+            Esci
+          </button>
+        </form>
+      </div>
     </nav>
   );
 }
