@@ -72,7 +72,8 @@ Ogni chat di sezione inizia con: *"Leggi ARCHITETTURA.md e SCHEMA-DATABASE.md, p
 - [x] Scheletro Next.js collegato a Supabase, codice su GitHub
 - [x] Bozza schema database (v0.1)
 - [x] Fondamenta: migrazione `0001_fondamenta.sql`, login, profili e ruoli, dipendenti, registro modifiche, impaginazione, pagina Impostazioni
-- [ ] Fondamenta: migrazione applicata su `gestionale-dev` e provata con un account per ruolo
+- [x] Fondamenta: migrazione applicata su `gestionale-dev`, login del titolare funzionante
+- [ ] Fondamenta: prova con un account per ruolo (ufficio, contabilità, operaio)
 - [ ] Anagrafiche
 - [ ] Preventivi
 - [ ] Produzione
