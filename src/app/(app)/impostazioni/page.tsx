@@ -2,7 +2,8 @@
 import { richiediSezione } from "@/lib/utente";
 import { creaClientServer } from "@/lib/supabase/server";
 import { ETICHETTE_RUOLO, RUOLI, type Ruolo } from "@/lib/ruoli";
-import { salvaDipendente, salvaProfilo } from "./azioni";
+import { salvaProfilo } from "./azioni";
+import ElencoDipendenti from "@/components/ElencoDipendenti";
 
 type Profilo = { id: string; email: string; nome_visualizzato: string; ruolo: Ruolo; attivo: boolean };
 type Dipendente = {
@@ -42,10 +43,6 @@ export default async function Impostazioni({
   ]);
   const profili = (risProfili.data ?? []) as Profilo[];
   const dipendenti = (risDipendenti.data ?? []) as Dipendente[];
-
-  const collegati = new Set(dipendenti.map((d) => d.profilo_id).filter(Boolean));
-  const accountLiberi = (attuale: string | null) =>
-    profili.filter((p) => !collegati.has(p.id) || p.id === attuale);
 
   return (
     <div className="flex max-w-5xl flex-col gap-8">
@@ -117,83 +114,8 @@ export default async function Impostazioni({
         </ul>
       </section>
 
-      {/* ---------------- Dipendenti ---------------- */}
-      <section className="rounded-xl border border-slate-200 bg-white">
-        <div className="border-b border-slate-200 p-4">
-          <h2 className="font-semibold">Dipendenti</h2>
-          <p className="mt-1 text-sm text-slate-500">
-            Collega un account se il dipendente usa l&apos;app (es. per timbrare dal telefono).
-          </p>
-        </div>
-
-        <form action={salvaDipendente} className="grid items-end gap-3 border-b border-slate-200 bg-slate-50 p-4 md:grid-cols-[1fr_1fr_1fr_1.2fr_auto]">
-          <label className={etichetta}>
-            Nome
-            <input name="nome" required className={campo} />
-          </label>
-          <label className={etichetta}>
-            Cognome
-            <input name="cognome" required className={campo} />
-          </label>
-          <label className={etichetta}>
-            Mansione principale
-            <input name="mansione_principale" placeholder="es. Assemblaggio" className={campo} />
-          </label>
-          <label className={etichetta}>
-            Account
-            <select name="profilo_id" defaultValue="" className={campo}>
-              <option value="">— nessuno —</option>
-              {accountLiberi(null).map((p) => (
-                <option key={p.id} value={p.id}>{p.nome_visualizzato || p.email}</option>
-              ))}
-            </select>
-          </label>
-          <button className={pulsante}>Aggiungi</button>
-        </form>
-
-        {dipendenti.length === 0 ? (
-          <p className="p-4 text-sm text-slate-500">Nessun dipendente inserito.</p>
-        ) : (
-          <ul className="divide-y divide-slate-100">
-            {dipendenti.map((d) => (
-              <li key={d.id} className={`p-4 ${d.attivo ? "" : "opacity-60"}`}>
-                <form
-                  action={salvaDipendente}
-                  className="grid items-end gap-3 md:grid-cols-[1fr_1fr_1fr_1.2fr_auto_auto]"
-                >
-                  <input type="hidden" name="id" value={d.id} />
-                  <label className={etichetta}>
-                    Nome
-                    <input name="nome" defaultValue={d.nome} required className={campo} />
-                  </label>
-                  <label className={etichetta}>
-                    Cognome
-                    <input name="cognome" defaultValue={d.cognome} required className={campo} />
-                  </label>
-                  <label className={etichetta}>
-                    Mansione principale
-                    <input name="mansione_principale" defaultValue={d.mansione_principale ?? ""} className={campo} />
-                  </label>
-                  <label className={etichetta}>
-                    Account
-                    <select name="profilo_id" defaultValue={d.profilo_id ?? ""} className={campo}>
-                      <option value="">— nessuno —</option>
-                      {accountLiberi(d.profilo_id).map((p) => (
-                        <option key={p.id} value={p.id}>{p.nome_visualizzato || p.email}</option>
-                      ))}
-                    </select>
-                  </label>
-                  <label className="flex items-center gap-2 pb-2 text-sm">
-                    <input type="checkbox" name="attivo" defaultChecked={d.attivo} className="h-4 w-4" />
-                    Attivo
-                  </label>
-                  <button className={pulsante}>Salva</button>
-                </form>
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
+      {/* ---------------- Dipendenti (stesso elenco della scheda Anagrafiche) ---------------- */}
+      <ElencoDipendenti dipendenti={dipendenti} account={profili} modificabile ritorno="/impostazioni" />
     </div>
   );
 }

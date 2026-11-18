@@ -2,7 +2,7 @@
 
 > **Documento di riferimento condiviso.** Ogni chat del progetto lo legge prima di toccare il database.
 > Chi aggiunge o modifica una tabella aggiorna questo file nello stesso momento.
-> Stato: **v0.2** (17/11/2026) – Fondamenta scritte in `supabase/migrations/0001_fondamenta.sql` (da applicare su `gestionale-dev`); le altre sezioni sono ancora bozza.
+> Stato: **v0.3** (17/11/2026) – Fondamenta in `0001_fondamenta.sql` (applicata su `gestionale-dev`), Anagrafiche in `0002_anagrafiche.sql`; le altre sezioni sono ancora bozza.
 
 ## Regole comuni a tutte le tabelle
 - Nomi in italiano, minuscolo, con trattino basso (`ragione_sociale`). Tabelle al plurale.
@@ -64,7 +64,7 @@ Enum `azione_registro`: `creazione`, `modifica`, `archiviazione`.
 | prima, dopo | jsonb | riga intera prima e dopo la modifica |
 
 > Si scrive **solo** tramite il trigger `registra_modifica` (gli utenti non possono inserire, modificare o cancellare).
-> Oggi tracciate: `profili`, `dipendenti`. Da agganciare: `timbrature` (obbligo di tracciare le correzioni), `preventivi`, `commesse`, `soggetti`.
+> Oggi tracciate: `profili`, `dipendenti` e tutte le tabelle delle Anagrafiche. Da agganciare: `timbrature` (obbligo di tracciare le correzioni), `preventivi`, `commesse`.
 > Serve anche per le "Attività recenti" della Dashboard: oggi lo legge solo il titolare; quando si farà la Dashboard si deciderà cosa mostrare agli altri ruoli.
 
 ### Permessi Fondamenta (attivi)
@@ -76,39 +76,65 @@ Enum `azione_registro`: `creazione`, `modifica`, `archiviazione`.
 
 ---
 
-## 2. Anagrafiche
+## 2. Anagrafiche — ✅ in `0002_anagrafiche.sql`
+
+Enum `tipo_soggetto`: `cliente`, `fornitore`, `entrambi`.
+Enum `tipo_articolo`: `articolo`, `lavorazione`, `servizio`.
+Tutte le tabelle hanno `attivo` (predefinito true), i campi `creato_*`/`aggiornato_*`, i trigger `b_aggiornamento`, `vieta_cancellazione`, `z_registro` (sono tutte tracciate nel registro).
+Solo soggetti italiani (decisione 17/11): i controlli di formato sono quelli italiani.
 
 ### `soggetti` — clienti e fornitori (una sola tabella)
 | campo | tipo | note |
 |---|---|---|
-| tipo | enum | `cliente`, `fornitore`, `entrambi` |
-| ragione_sociale | text | obbligatorio |
-| partita_iva, codice_fiscale | text | |
-| codice_sdi, pec | text | per la fattura elettronica |
-| indirizzo, cap, citta, provincia | text | |
-| email, telefono, referente | text | |
-| condizione_pagamento_id | uuid → condizioni_pagamento | |
-| listino_id | uuid → listini | |
-| note | text | |
+| tipo | tipo_soggetto | predefinito `cliente`; `entrambi` compare sia tra i clienti sia tra i fornitori |
+| ragione_sociale | text | obbligatoria (non vuota) |
+| partita_iva | text | 11 cifre; **unica tra i soggetti attivi** |
+| codice_fiscale | text | 16 caratteri (persone) o 11 cifre (aziende) |
+| codice_sdi | text | 7 caratteri (privati: `0000000`) |
+| pec, email | text | formato email |
+| indirizzo, citta, telefono, referente, note | text | |
+| cap | text | 5 cifre |
+| provincia | text | sigla di 2 lettere maiuscole |
+| condizione_pagamento_id | uuid → condizioni_pagamento | facoltativo |
+| listino_id | uuid → listini | vuoto = paga il prezzo base |
+
+> Trigger `a_normalizza` (`normalizza_soggetto`): prima di salvare toglie spazi, mette in maiuscolo CF/SDI/provincia, toglie "IT" e punti dalla P.IVA, mette in minuscolo email/PEC, trasforma i campi vuoti in null.
+> La cifra di controllo di P.IVA e codice fiscale la verifica l'app (`src/lib/validazioni.ts`), il database controlla solo il formato.
 
 ### `condizioni_pagamento`
-`descrizione` (es. "Bonifico 30 gg"), `giorni`.
+`descrizione` (obbligatoria, unica tra le attive, es. "Bonifico 30 gg"), `giorni` (0–365).
+Dati iniziali: Rimessa diretta (0), Bonifico 30 gg (30), Bonifico 60 gg (60).
 
 ### `listini`
-`nome` (es. "Standard").
+`nome` (obbligatorio, unico tra gli attivi, es. "Rivenditori"), `note`.
+Non c'è un listino "Standard": chi non ha listino paga il **prezzo base** dell'articolo.
 
-### `articoli` — articoli e lavorazioni
+### `articoli` — articoli, lavorazioni e servizi
 | campo | tipo | note |
 |---|---|---|
-| codice | text | |
-| descrizione | text | |
-| tipo | enum | `articolo`, `lavorazione`, `servizio` |
-| unita_misura | text | pz, m, h… |
-| prezzo_base | numeric | |
-| aliquota_iva | numeric | es. 22 |
+| codice | text | facoltativo; se c'è, unico tra gli attivi (maiuscole/minuscole uguali) |
+| descrizione | text | obbligatoria |
+| tipo | tipo_articolo | predefinito `articolo` |
+| unita_misura | text | obbligatoria, predefinito `pz` |
+| prezzo_base | numeric(12,4) | ≥ 0, IVA esclusa. **4 decimali** (prezzi al pezzo come 0,0350 €) |
+| aliquota_iva | numeric(5,2) | 22, 10, 5, 4 o 0; predefinito 22 |
+| note | text | |
 
-### `prezzi_listino` *(più avanti)*
-`listino_id`, `articolo_id`, `prezzo`: prezzo diverso per listino.
+> Trigger `a_normalizza` (`normalizza_articolo`): toglie spazi, codice vuoto → null.
+
+### `prezzi_listino` — prezzo di un articolo in un listino
+`listino_id`, `articolo_id`, `prezzo` numeric(12,4) ≥ 0. **Una sola riga per coppia** (`unique (listino_id, articolo_id)`): per togliere un prezzo si mette `attivo = false`, per rimetterlo si riattiva la stessa riga (l'app usa un *upsert*).
+
+### Funzione `prezzo_per_cliente(articolo, soggetto)`
+Restituisce il prezzo del listino del cliente se c'è (riga attiva, listino attivo), altrimenti il prezzo base. **Da usare nei Preventivi** per proporre il prezzo di una riga. Rispetta i permessi di chi la chiama.
+
+### Permessi Anagrafiche (attivi)
+| | Titolare | Ufficio | Contabilità | Operaio |
+|---|---|---|---|---|
+| soggetti, articoli, listini, prezzi_listino, condizioni_pagamento | lettura, inserimento, modifica | lettura, inserimento, modifica | lettura | — |
+
+> **Per la chat Produzione:** gli operai oggi non leggono `soggetti`. Se nelle commesse/task devono vedere il nome del cliente, serve una regola o una vista apposita (solo `ragione_sociale` dei clienti delle commesse visibili).
+> **Per la chat Preventivi:** il mockup mostra in Anagrafiche il numero di preventivi e commesse collegati a un cliente: da aggiungere alla scheda cliente quando esisteranno quelle tabelle.
 
 ---
 
@@ -192,8 +218,8 @@ Da definire.
 ## Permessi per ruolo (proposta per le sezioni future, da confermare)
 | | Titolare | Ufficio | Contabilità | Operaio |
 |---|---|---|---|---|
-| Anagrafiche clienti/fornitori | tutto | tutto | tutto | — |
-| Dipendenti | tutto | lettura | lettura | solo sé stesso |
+| Anagrafiche clienti/fornitori/articoli | tutto (no cancellazione) | tutto (no cancellazione) | lettura | — |
+| Dipendenti | tutto (anche da Anagrafiche) | lettura | lettura | solo sé stesso |
 | Preventivi | tutto | tutto | lettura | — |
 | Commesse e task | tutto | tutto | lettura | solo i propri task |
 | Timbrature | tutto | lettura e correzione | lettura ed export | solo le proprie, solo nuove |

@@ -8,8 +8,13 @@ import { richiediRuolo } from "@/lib/utente";
 import { creaClientServer } from "@/lib/supabase/server";
 import { eRuolo } from "@/lib/ruoli";
 
-function torna(messaggio: string, errore = false): never {
-  redirect(`/impostazioni?${errore ? "errore" : "ok"}=${encodeURIComponent(messaggio)}`);
+// Pagine a cui si può tornare dopo un salvataggio (i dipendenti si modificano anche da Anagrafiche).
+const RITORNI = ["/impostazioni", "/anagrafiche?scheda=dipendenti"];
+
+function torna(messaggio: string, errore = false, ritorno = "/impostazioni"): never {
+  const base = RITORNI.includes(ritorno) ? ritorno : "/impostazioni";
+  const separatore = base.includes("?") ? "&" : "?";
+  redirect(`${base}${separatore}${errore ? "errore" : "ok"}=${encodeURIComponent(messaggio)}`);
 }
 
 function testo(dati: FormData, campo: string): string {
@@ -47,21 +52,23 @@ export async function salvaProfilo(dati: FormData) {
 export async function salvaDipendente(dati: FormData) {
   await richiediRuolo("titolare");
   const id = testo(dati, "id");
+  const ritorno = testo(dati, "ritorno");
   const valori = {
     nome: testo(dati, "nome"),
     cognome: testo(dati, "cognome"),
     mansione_principale: testo(dati, "mansione_principale") || null,
     profilo_id: testo(dati, "profilo_id") || null,
   };
-  if (!valori.nome || !valori.cognome) torna("Nome e cognome sono obbligatori.", true);
+  if (!valori.nome || !valori.cognome) torna("Nome e cognome sono obbligatori.", true, ritorno);
 
   const supabase = await creaClientServer();
 
   if (!id) {
     const { error } = await supabase.from("dipendenti").insert(valori);
-    if (error) torna(spiegaErrore(error), true);
+    if (error) torna(spiegaErrore(error), true, ritorno);
     revalidatePath("/impostazioni");
-    torna(`${valori.nome} ${valori.cognome} aggiunto.`);
+    revalidatePath("/anagrafiche");
+    torna(`${valori.nome} ${valori.cognome} aggiunto.`, false, ritorno);
   }
 
   const { data, error } = await supabase
@@ -69,9 +76,10 @@ export async function salvaDipendente(dati: FormData) {
     .update({ ...valori, attivo: dati.get("attivo") === "on" })
     .eq("id", id)
     .select("id");
-  if (error) torna(spiegaErrore(error), true);
-  if (!data?.length) torna("Dipendente non trovato o permessi insufficienti.", true);
+  if (error) torna(spiegaErrore(error), true, ritorno);
+  if (!data?.length) torna("Dipendente non trovato o permessi insufficienti.", true, ritorno);
 
   revalidatePath("/impostazioni");
-  torna("Dipendente salvato.");
+  revalidatePath("/anagrafiche");
+  torna("Dipendente salvato.", false, ritorno);
 }
