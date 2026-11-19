@@ -9,6 +9,14 @@
 - **GitHub**: repository privato `gestionale`
 - Codice sul Mac in `Documenti/Sviluppo/gestionale`
 
+## Mockup di riferimento
+**Confermato il 19/11/2026:** "Mockup gestionale – preventivi a fasi" → https://claude.ai/artifact/B5LEbqMxrBA2FJXqQu8U4s
+Contiene tutte le schede. Sostituisce il mockup del 15/11 (https://claude.ai/artifact/AupuzjZ62JxYoLTXNoTjMf) e la bozza separata "Anagrafica cliente/fornitore – proposta" (v3, ora inclusa).
+Novità del 19/11:
+- **Preventivi a fasi** (ore × tariffa + materiali + ricarico): l'azienda lavora su misura (stampa, insegne, wrapping, allestimenti, bandiere), **non c'è un listino di vendita**.
+- **Dashboard** con "Ore previste e ore reali" e "Pose e installazioni in programma".
+- **Scheda cliente/fornitore completa**: azienda / persona fisica / PA, soggetti esteri, sedi, più contatti, banca e Ri.Ba., scadenze, reverse charge, dichiarazioni d'intento, campi per la fattura elettronica (XML).
+
 ## Ambienti
 | | Supabase | Uso |
 |---|---|---|
@@ -43,9 +51,9 @@ docs/                    questi documenti
 - I moduli lunghi sono componenti `"use client"` con `useActionState`: se il salvataggio non va, il modulo resta compilato e mostra l'errore.
 
 ## Regole
-1. **Il database si cambia solo con file in `supabase/migrations/`**, numerati in ordine (`0001_fondamenta.sql`, `0002_anagrafiche.sql`…), mai a mano dal pannello. Così lo stesso schema si ricrea identico su `gestionale-prod`. Per ora una migrazione si applica incollando il file intero in Supabase → **SQL Editor** → Run (una volta sola per database).
+1. **Il database si cambia solo con file in `supabase/migrations/`**, numerati in ordine (`0001_fondamenta.sql`, `0002_anagrafiche.sql`…), mai a mano dal pannello. Così lo stesso schema si ricrea identico su `gestionale-prod`. Per ora una migrazione si applica incollando il file intero in Supabase → **SQL Editor** → Run (una volta sola per database). Una migrazione **non ancora applicata** da nessuna parte si può ancora correggere; una già applicata no (si crea la successiva).
 2. **`docs/SCHEMA-DATABASE.md` è la fonte di verità** sulle tabelle: chi cambia una tabella lo aggiorna.
-3. Le **tabelle condivise** (`profili`, `dipendenti`, `soggetti`, `articoli`, `commesse`, `registro_modifiche`) si modificano con cautela: altre sezioni le usano.
+3. Le **tabelle condivise** (`profili`, `dipendenti`, `soggetti`, `articoli`, `codici_iva`, `commesse`, `registro_modifiche`) si modificano con cautela: altre sezioni le usano.
 4. Interfaccia e nomi in **italiano**.
 5. Le chiavi stanno solo in `.env.local` (mai su GitHub, mai in chat).
 6. A fine lavoro: `git add .` → `git commit -m "..."` → `git push`.
@@ -65,11 +73,11 @@ docs/                    questi documenti
 | Chat | Cosa fa | Dipende da |
 |---|---|---|
 | **Fondamenta** | login, profili, ruoli, dipendenti, registro modifiche, impaginazione | — |
-| **Anagrafiche** | clienti/fornitori, articoli, listini, condizioni di pagamento | Fondamenta |
-| **Preventivi** | preventivi, righe, PDF, invio email | Anagrafiche |
-| **Produzione** | commesse, task, piano settimanale | Preventivi |
+| **Anagrafiche** | clienti/fornitori (azienda, persona, PA, esteri), contatti, sedi, banca e scadenze, reverse charge, dichiarazioni d'intento; catalogo materiali; codici IVA, pagamenti, banche aziendali | Fondamenta |
+| **Preventivi** | preventivi a fasi (ore × tariffa + materiali + ricarico), tariffe orarie, modelli di lavorazione, PDF per il cliente, invio email ai contatti giusti | Anagrafiche |
+| **Produzione** | commesse (con ore previste e sede di posa), task, pose fuori sede, piano settimanale | Preventivi |
 | **Timbrature** | timbratura da telefono (anche offline), presenze, export | Fondamenta, Produzione |
-| **Dashboard** | indicatori e attività recenti | tutte |
+| **Dashboard** | indicatori, attività recenti, ore previste/reali, pose in programma | tutte |
 
 Ogni chat di sezione inizia con: *"Leggi ARCHITETTURA.md e SCHEMA-DATABASE.md, poi lavoriamo sulla sezione X"*.
 
@@ -80,8 +88,11 @@ Ogni chat di sezione inizia con: *"Leggi ARCHITETTURA.md e SCHEMA-DATABASE.md, p
 - [x] Fondamenta: migrazione `0001_fondamenta.sql`, login, profili e ruoli, dipendenti, registro modifiche, impaginazione, pagina Impostazioni
 - [x] Fondamenta: migrazione applicata su `gestionale-dev`, login del titolare funzionante
 - [x] Primo deploy su Vercel (regione Francoforte, collegato a `gestionale-dev`; ogni `git push` aggiorna il sito). Vercel ha accesso solo al repository `gestionale`
-- [x] Anagrafiche: migrazione `0002_anagrafiche.sql` (clienti/fornitori, articoli, listini con prezzi per articolo, condizioni di pagamento) e pagina Anagrafiche con 5 schede (Clienti, Fornitori, Dipendenti, Articoli, Pagamenti e listini). Elenco dipendenti condiviso con Impostazioni (`components/ElencoDipendenti.tsx`)
-- [ ] Anagrafiche: applicare `0002_anagrafiche.sql` su `gestionale-dev` e provare con dati inventati
+- [x] Anagrafiche (prima versione): `0002_anagrafiche.sql` e pagina Anagrafiche con 5 schede. **Superata dal mockup del 19/11**. Era stata applicata per errore su `gestionale-dev`: tolta il 19/11 (tabelle, funzioni e tipi della vecchia versione) prima di applicare la nuova
+- [x] Mockup confermato (19/11): preventivi a fasi + scheda cliente/fornitore v3; schema v0.5
+- [x] Anagrafiche: `0002_anagrafiche.sql` e pagina **riscritte** secondo SCHEMA-DATABASE v0.5 (sezione 2): schede Clienti, Fornitori, Articoli, "Codici IVA, pagamenti e banche"; scheda cliente/fornitore completa come nel mockup, storico modifiche per il titolare
+- [x] Anagrafiche: `0002_anagrafiche.sql` applicata su `gestionale-dev` (19/11)
+- [x] Anagrafiche: pagina provata su `gestionale-dev` con dati inventati (19/11)
 - [ ] Preventivi
 - [ ] Produzione
 - [ ] Timbrature
@@ -89,10 +100,11 @@ Ogni chat di sezione inizia con: *"Leggi ARCHITETTURA.md e SCHEMA-DATABASE.md, p
 
 ### Da fare più avanti (Fondamenta)
 - Pagina "password dimenticata" (reset in autonomia), prima di dare l'app ai dipendenti veri
-- Decidere la quinta scheda prima della chat Preventivi
+- Decidere la quinta scheda (la fatturazione elettronica è candidata: l'anagrafica ha già i dati)
 - In produzione: progetto Vercel collegato a `gestionale-prod`, dominio aziendale
 
 ### Da fare più avanti (Anagrafiche)
+- Verificare con il commercialista: reverse charge (TD16–TD19), dichiarazioni d'intento, elenco codici IVA/nature, condizioni di pagamento a rate
 - Scheda cliente: numero di preventivi e commesse collegati (quando esisteranno quelle tabelle)
-- Se gli operai devono vedere il nome del cliente nelle commesse: regola o vista apposita (oggi non leggono `soggetti`)
-- Eventuale import iniziale di clienti/articoli da file (CSV/Excel) prima di passare a `gestionale-prod`
+- Se gli operai devono vedere nome cliente o indirizzo di posa: vista apposita (oggi non leggono `soggetti`)
+- Eventuale import iniziale di clienti/fornitori/articoli dal vecchio gestionale (CSV/Excel) prima di passare a `gestionale-prod`

@@ -87,3 +87,28 @@ export function numeroPerCampo(valore: number | string | null | undefined): stri
     useGrouping: false,
   }).format(Number(valore));
 }
+
+/** Toglie spazi e mette in maiuscolo: "it60 x054…" → "IT60X054…" */
+export function pulisciIban(valore: string): string {
+  return valore.toUpperCase().replace(/\s/g, "");
+}
+
+/** Vero se l'IBAN ha il formato giusto e i 2 numeri di controllo tornano (calcolo "modulo 97"). */
+export function ibanValido(iban: string): boolean {
+  if (!/^[A-Z]{2}[0-9]{2}[A-Z0-9]{11,30}$/.test(iban)) return false;
+  if (iban.startsWith("IT") && iban.length !== 27) return false;
+  const riordinato = iban.slice(4) + iban.slice(0, 4);
+  let resto = 0;
+  for (const c of riordinato) {
+    const n = /\d/.test(c) ? c : String(c.charCodeAt(0) - 55); // A=10, B=11…
+    for (const cifra of n) resto = (resto * 10 + Number(cifra)) % 97;
+  }
+  return resto === 1;
+}
+
+/** Da un IBAN italiano ricava ABI e CAB (posizioni fisse); null se non è italiano o è incompleto. */
+export function abiCabDaIban(iban: string): { abi: string; cab: string } | null {
+  const i = pulisciIban(iban);
+  if (!/^IT[0-9]{2}[A-Z][0-9]{10}[A-Z0-9]{12}$/.test(i)) return null;
+  return { abi: i.slice(5, 10), cab: i.slice(10, 15) };
+}

@@ -15,6 +15,6 @@ Stack: **Next.js** (TypeScript, Tailwind) · **Supabase** (database, login, RLS)
 5. Le modifiche al database vanno sempre in un nuovo file numerato in `supabase/migrations/` (es. `0003_...sql`), mai a mano dal pannello.
 6. Quando una parte funziona, proponimi di fare commit e push.
 
-## In attesa di approvazione
-La sezione **Anagrafiche** (`src/app/(app)/anagrafiche/`) e la migrazione `supabase/migrations/0002_anagrafiche.sql` aspettano che il mio datore di lavoro approvi il mockup.
-Finché non lo dico io: **non applicare la migrazione al database** e **non modificare le Anagrafiche**.
+## Stato delle Anagrafiche
+Il mockup è stato confermato il 19/11/2026. La sezione **Anagrafiche** (`src/app/(app)/anagrafiche/`) e la migrazione `supabase/migrations/0002_anagrafiche.sql` sono state riscritte secondo SCHEMA-DATABASE v0.5.
+La migrazione 0002 è **applicata su `gestionale-dev`** (19/11/2026, dopo aver tolto la vecchia versione con i listini). Su `gestionale-prod` non va applicata finché non lo dico io.

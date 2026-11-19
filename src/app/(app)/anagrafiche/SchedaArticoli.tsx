@@ -1,18 +1,21 @@
-// Scheda Articoli e listini: elenco a sinistra, articolo scelto (con prezzi per listino) a destra.
+// Scheda Articoli (catalogo materiali con costo): elenco a sinistra, articolo scelto a destra.
 import Link from "next/link";
 import { creaClientServer } from "@/lib/supabase/server";
 import { euro } from "@/lib/validazioni";
 import ModuloArticolo from "./ModuloArticolo";
 import { indirizzo, pulisciRicerca } from "./indirizzo";
 import { riquadro } from "./stile";
-import { ETICHETTE_TIPO_ARTICOLO, type Articolo, type Listino, type PrezzoListino } from "./tipi";
+import { ETICHETTE_TIPO_ARTICOLO, type Articolo, type CodiceIva } from "./tipi";
 
 type Props = { q?: string; id?: string; archiviati: boolean; modificabile: boolean };
 
 type RigaElenco = Pick<
   Articolo,
-  "id" | "codice" | "descrizione" | "tipo" | "unita_misura" | "prezzo_base" | "aliquota_iva" | "attivo"
->;
+  "id" | "codice" | "descrizione" | "tipo" | "unita_misura" | "costo_unitario" | "larghezza_bobina_m" | "attivo"
+> & {
+  iva: { codice: string } | null;
+  fornitore: { denominazione: string } | null;
+};
 
 export default async function SchedaArticoli({ q, id, archiviati, modificabile }: Props) {
   const supabase = await creaClientServer();
@@ -20,7 +23,9 @@ export default async function SchedaArticoli({ q, id, archiviati, modificabile }
 
   let query = supabase
     .from("articoli")
-    .select("id, codice, descrizione, tipo, unita_misura, prezzo_base, aliquota_iva, attivo")
+    .select(
+      "id, codice, descrizione, tipo, unita_misura, costo_unitario, larghezza_bobina_m, attivo, iva:codici_iva(codice), fornitore:soggetti(denominazione)"
+    )
     .order("descrizione")
     .limit(500);
   if (!archiviati) query = query.eq("attivo", true);
@@ -31,22 +36,31 @@ export default async function SchedaArticoli({ q, id, archiviati, modificabile }
 
   const nuovo = id === "nuovo";
   const conId = Boolean(id && !nuovo);
-  const [risElenco, risScelto, risPrezzi, risListini] = await Promise.all([
+  const [risElenco, risScelto, risIva, risFornitori] = await Promise.all([
     query,
     conId
       ? supabase
           .from("articoli")
-          .select("id, codice, descrizione, tipo, unita_misura, prezzo_base, aliquota_iva, note, attivo, aggiornato_il")
+          .select(
+            "id, codice, descrizione, tipo, unita_misura, costo_unitario, larghezza_bobina_m, codice_iva_id, fornitore_id, note, attivo, aggiornato_il"
+          )
           .eq("id", id!)
           .maybeSingle()
       : Promise.resolve({ data: null }),
-    conId
-      ? supabase.from("prezzi_listino").select("listino_id, prezzo").eq("articolo_id", id!).eq("attivo", true)
-      : Promise.resolve({ data: [] }),
-    supabase.from("listini").select("id, nome, note, attivo").eq("attivo", true).order("nome"),
+    supabase
+      .from("codici_iva")
+      .select("id, codice, descrizione, aliquota, natura, attivo")
+      .order("aliquota", { ascending: false })
+      .order("codice"),
+    supabase
+      .from("soggetti")
+      .select("id, denominazione, attivo")
+      .in("tipo", ["fornitore", "entrambi"])
+      .order("denominazione")
+      .limit(2000),
   ]);
 
-  const elenco = (risElenco.data ?? []) as RigaElenco[];
+  const elenco = (risElenco.data ?? []) as unknown as RigaElenco[];
   const scelto = (risScelto.data ?? null) as Articolo | null;
   const mostraModulo = nuovo ? modificabile : Boolean(scelto);
 
@@ -63,8 +77,8 @@ export default async function SchedaArticoli({ q, id, archiviati, modificabile }
               <tr className="border-b border-slate-200 text-left text-xs font-semibold tracking-wide text-slate-500 uppercase">
                 <th className="px-4 py-3">Codice</th>
                 <th className="px-4 py-3">Descrizione</th>
-                <th className="px-4 py-3">Tipo</th>
-                <th className="px-4 py-3 text-right">Prezzo base</th>
+                <th className="px-4 py-3">Fornitore</th>
+                <th className="px-4 py-3 text-right">Costo</th>
                 <th className="px-4 py-3 text-right">IVA</th>
               </tr>
             </thead>
@@ -85,13 +99,19 @@ export default async function SchedaArticoli({ q, id, archiviati, modificabile }
                       >
                         {a.descrizione}
                       </Link>
+                      {a.tipo !== "articolo" && (
+                        <span className="ml-2 rounded bg-slate-100 px-1.5 py-0.5 text-xs text-slate-600">{ETICHETTE_TIPO_ARTICOLO[a.tipo]}</span>
+                      )}
+                      {a.larghezza_bobina_m && (
+                        <span className="ml-2 text-xs text-slate-500">bobina {Number(a.larghezza_bobina_m).toLocaleString("it-IT")} m</span>
+                      )}
                       {!a.attivo && <span className="ml-2 text-xs">(archiviato)</span>}
                     </td>
-                    <td className="px-4 py-3">{ETICHETTE_TIPO_ARTICOLO[a.tipo]}</td>
+                    <td className="px-4 py-3">{a.fornitore?.denominazione}</td>
                     <td className="px-4 py-3 text-right whitespace-nowrap">
-                      {euro(a.prezzo_base)} <span className="text-slate-400">/ {a.unita_misura}</span>
+                      {euro(a.costo_unitario)} <span className="text-slate-400">/ {a.unita_misura}</span>
                     </td>
-                    <td className="px-4 py-3 text-right">{Number(a.aliquota_iva)}%</td>
+                    <td className="px-4 py-3 text-right">{a.iva?.codice}</td>
                   </tr>
                 );
               })}
@@ -103,6 +123,7 @@ export default async function SchedaArticoli({ q, id, archiviati, modificabile }
         )}
       </section>
 
+      {/* su telefono la scheda scelta compare sopra l'elenco */}
       <section
         aria-label="Scheda articolo"
         className={`${riquadro} min-w-0 flex-[2_1_340px] ${mostraModulo ? "order-first lg:order-none" : ""}`}
@@ -111,13 +132,13 @@ export default async function SchedaArticoli({ q, id, archiviati, modificabile }
           <ModuloArticolo
             key={scelto ? `${scelto.id}-${scelto.aggiornato_il}` : "nuovo"}
             articolo={scelto}
-            listini={(risListini.data ?? []) as Listino[]}
-            prezzi={(risPrezzi.data ?? []) as PrezzoListino[]}
+            codiciIva={(risIva.data ?? []) as CodiceIva[]}
+            fornitori={(risFornitori.data ?? []) as { id: string; denominazione: string; attivo: boolean }[]}
             modificabile={modificabile}
           />
         ) : (
           <p className="p-6 text-sm text-slate-500">
-            {conId ? "Articolo non trovato." : "Scegli un articolo dall'elenco per vedere la scheda e i prezzi per listino."}
+            {conId ? "Articolo non trovato." : "Scegli un articolo dall'elenco per vedere la scheda."}
           </p>
         )}
       </section>
