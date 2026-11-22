@@ -100,7 +100,8 @@ Ogni chat di sezione inizia con: *"Leggi ARCHITETTURA.md e SCHEMA-DATABASE.md, p
 - [x] Preventivi: `0003_preventivi.sql` applicata su `gestionale-dev` (verificato il 22/11: tabelle e viste presenti, chiuse agli utenti non collegati)
 - [x] Preventivi passo 2: tariffe orarie in Impostazioni (solo titolare), scritto (22/11) — da provare su `gestionale-dev`
 - [x] Preventivi passo 3: elenco con ricerca (cliente, numero, oggetto), filtri per stato con i numeri, "archiviati", anteprima con fasi e totali dalla vista `preventivi_riepilogo` (22/11) — da provare su `gestionale-dev` con `supabase/prove/dati_prova_preventivi.sql`
-- [ ] Preventivi: passi 4–7
+- [x] Preventivi passo 4: pagina del preventivo (`?id=…`, `?id=nuovo`) con fasi, ore, materiali (catalogo o liberi, bobine) e riepilogo dal vivo con le stesse regole di arrotondamento del database (`preventivi/calcoli.ts`); salvataggio con `salva_preventivo`, cambio di stato, archivia/ripristina (22/11) — provato su `gestionale-dev` come titolare
+- [ ] Preventivi: passi 5–7
 - [ ] Produzione
 - [ ] Timbrature
 - [ ] Dashboard

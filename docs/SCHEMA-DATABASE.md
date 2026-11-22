@@ -231,6 +231,8 @@ Dati confermati dall'utente (19/11): **più tariffe orarie** (persona/reparto/ma
 - Un preventivo **accettato o rifiutato non si modifica più** (né lui né fasi e righe): si può solo cambiarne lo stato o archiviarlo. Per rifarlo si duplica. Bozze e inviati si modificano.
 - **Margine in % sul prezzo al cliente** (348,42 € su 1.330 € = 26,2%).
 - Costo orario e costo dei materiali si **copiano** nella riga quando la si crea: se cambia una tariffa o un articolo, i preventivi già fatti non cambiano.
+- Nella riga, **costo orario e costo del materiale sono modificabili** (proposti da tariffa e catalogo, si possono cambiare per i casi speciali).
+- Un preventivo accettato o rifiutato si può **riportare a bozza o inviato** da titolare e ufficio, con una conferma: torna modificabile.
 - PDF: prima una pagina da stampare ("Stampa → Salva come PDF"); file PDF vero e invio email alla fine (passo 7, serve un servizio di invio email).
 
 Il PDF/email si invia ai contatti del cliente con `riceve_preventivi = true`.

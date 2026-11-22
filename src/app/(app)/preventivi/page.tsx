@@ -6,9 +6,10 @@ import Link from "next/link";
 import { richiediSezione } from "@/lib/utente";
 import { creaClientServer } from "@/lib/supabase/server";
 import { pulisciRicerca } from "../anagrafiche/indirizzo";
-import { campo, pulsante, pulsanteSecondario, riquadro } from "../anagrafiche/stile";
+import { campo, pulsante, pulsanteSecondario } from "../anagrafiche/stile";
 import ElencoPreventivi, { filtroRicerca } from "./ElencoPreventivi";
 import AnteprimaPreventivo from "./AnteprimaPreventivo";
+import SchedaPreventivo from "./SchedaPreventivo";
 import { STATI, eStato, indirizzo, type Stato } from "./comuni";
 
 type Parametri = {
@@ -26,20 +27,8 @@ export default async function Preventivi({ searchParams }: { searchParams: Promi
   const p = await searchParams;
   const modificabile = io.ruolo === "titolare" || io.ruolo === "ufficio";
 
-  // Pagina del singolo preventivo: arriva al passo 4.
-  if (p.id) {
-    return (
-      <div className="flex flex-col gap-5">
-        <h1 className="text-2xl font-semibold">Preventivo</h1>
-        <div className={`${riquadro} flex flex-col gap-2 p-6 text-sm text-slate-600`}>
-          <p>La pagina del preventivo (fasi, ore, materiali e calcoli dal vivo) è in costruzione.</p>
-          <Link href={indirizzo(p.id === "nuovo" ? {} : { sel: p.id })} className="text-blue-700 hover:underline">
-            ← Torna all&apos;elenco
-          </Link>
-        </div>
-      </div>
-    );
-  }
+  // Pagina del singolo preventivo (o nuovo)
+  if (p.id) return <SchedaPreventivo id={p.id} modificabile={modificabile} ok={p.ok} errore={p.errore} />;
 
   const stato: Stato | null = eStato(p.stato) ? p.stato : null;
   const ricerca = pulisciRicerca(p.q);
