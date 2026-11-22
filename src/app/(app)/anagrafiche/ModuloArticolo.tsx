@@ -107,6 +107,31 @@ export default function ModuloArticolo({ articolo, codiciIva, fornitori, modific
         <p className="col-span-2 -mt-1 text-xs text-slate-500">
           Per i materiali in bobina, nei preventivi: m² = larghezza bobina × metri lineari.
         </p>
+        <label className={etichetta}>
+          Lastra: larghezza (cm)
+          <input
+            name="lastra_larghezza_cm"
+            inputMode="decimal"
+            defaultValue={v("lastra_larghezza_cm", articolo?.lastra_larghezza_cm ? String(articolo.lastra_larghezza_cm).replace(".", ",") : "")}
+            placeholder="solo materiali a lastra"
+            className={campo}
+          />
+        </label>
+        <label className={etichetta}>
+          Lastra: altezza (cm)
+          <input
+            name="lastra_altezza_cm"
+            inputMode="decimal"
+            defaultValue={v("lastra_altezza_cm", articolo?.lastra_altezza_cm ? String(articolo.lastra_altezza_cm).replace(".", ",") : "")}
+            placeholder="es. 205"
+            className={campo}
+          />
+        </label>
+        <p className="col-span-2 -mt-1 text-xs text-slate-500">
+          Per i materiali a lastra (es. 305 × 205 cm) il costo unitario è il <strong>prezzo della lastra intera</strong> e
+          l&apos;unità di misura «lastra». Nei preventivi si calcola quante lastre servono per i pezzi, oppure i soli m² usati.
+          Un articolo è in bobina oppure a lastra, non tutte e due.
+        </p>
         <label className={`${etichetta} col-span-2`}>
           Fornitore abituale
           <select name="fornitore_id" defaultValue={v("fornitore_id", articolo?.fornitore_id ?? "")} className={campo}>

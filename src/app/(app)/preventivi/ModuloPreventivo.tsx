@@ -3,18 +3,20 @@
 // Il salvataggio manda tutto insieme a salva_preventivo (tutto o niente). Se non va, la bozza resta qui.
 // Sola lettura per la contabilità e per i preventivi accettati, rifiutati o archiviati.
 import Link from "next/link";
-import { useActionState, useEffect, useMemo, useRef, useState, type FormEvent, type MouseEvent, type ReactNode } from "react";
+import { useRouter } from "next/navigation";
+import { useActionState, useEffect, useMemo, useRef, useState, useTransition, Fragment, type MouseEvent, type ReactNode } from "react";
+import { useConferma } from "./Conferma";
 import { euro } from "@/lib/validazioni";
 import { campo, etichetta, pulsante, pulsanteSecondario, riquadro } from "../anagrafiche/stile";
 import { archiviaPreventivo, cambiaStato, salvaPreventivo } from "./azioni";
 import {
-  centesimiMateriale,
+  calcolaMateriale,
   centesimiOre,
   inEuro,
   intero,
   perCampo,
-  quantitaBobina,
   totali as calcolaTotali,
+  type CalcoloMateriale,
 } from "./calcoli";
 import { EtichettaStato, STATI, indirizzo, ore as scriviOre, percento, type Stato } from "./comuni";
 import type {
@@ -27,6 +29,7 @@ import type {
   CodiceIvaScelto,
   EsitoSalvataggio,
   FaseSalvata,
+  Formato,
   PreventivoSalvato,
   TariffaScelta,
 } from "./tipi";
@@ -87,14 +90,42 @@ function bozzaFasi(fasi: FaseSalvata[]): BozzaFase[] {
       articolo_id: r.articolo_id,
       descrizione: r.descrizione,
       unita_misura: r.unita_misura,
-      bobina: r.larghezza_m !== null,
+      formato: (r.addebito_lastra ? "lastra" : r.larghezza_m !== null ? "bobina" : "normale") as Formato,
       larghezza_m: perCampo(r.larghezza_m, 0, 3),
       metri_lineari: perCampo(r.metri_lineari, 0, 3),
       quantita: perCampo(r.quantita, 0, 3),
       costo_unitario: perCampo(r.costo_unitario, 2, 4),
+      addebito_lastra: r.addebito_lastra ?? "lastre_intere",
+      lastra_larghezza_cm: perCampo(r.lastra_larghezza_cm, 0, 1),
+      lastra_altezza_cm: perCampo(r.lastra_altezza_cm, 0, 1),
+      costo_lastra: perCampo(r.costo_lastra, 2, 4),
+      pezzo_larghezza_cm: perCampo(r.pezzo_larghezza_cm, 0, 1),
+      pezzo_altezza_cm: perCampo(r.pezzo_altezza_cm, 0, 1),
+      pezzi: r.pezzi ? String(r.pezzi) : "",
+      margine_taglio_cm: perCampo(r.margine_taglio_cm ?? 0, 0, 1),
+      scarto_percentuale: perCampo(r.scarto_percentuale ?? 10, 0, 2),
     })),
   }));
 }
+
+/** Campi di partenza di un nuovo materiale (scarto predefinito 10%, margine di taglio 0). */
+const materialeVuoto = {
+  unita_misura: "pz",
+  formato: "normale" as Formato,
+  larghezza_m: "",
+  metri_lineari: "",
+  quantita: "",
+  costo_unitario: "",
+  addebito_lastra: "lastre_intere" as const,
+  lastra_larghezza_cm: "",
+  lastra_altezza_cm: "",
+  costo_lastra: "",
+  pezzo_larghezza_cm: "",
+  pezzo_altezza_cm: "",
+  pezzi: "",
+  margine_taglio_cm: "0",
+  scarto_percentuale: "10",
+};
 
 const faseVuota = (): BozzaFase => ({ chiave: nuovaChiave(), titolo: "", descrizione_cliente: "", ore: [], materiali: [] });
 
@@ -157,9 +188,15 @@ export default function ModuloPreventivo(props: Props) {
   useEffect(() => {
     if (!inCorso) salvando.current = false;
   }, [inCorso]);
-  const lasciaPagina = (e: MouseEvent) => {
-    if (modificato && !window.confirm("Ci sono modifiche non salvate. Uscire lo stesso?")) e.preventDefault();
-  };
+  // conferme dentro la pagina (window.confirm non funziona in tutti i browser)
+  const { chiedi, finestra } = useConferma();
+  const router = useRouter();
+  async function lasciaPagina(e: MouseEvent<HTMLAnchorElement>) {
+    if (!modificato) return;
+    e.preventDefault();
+    const destinazione = e.currentTarget.href;
+    if (await chiedi("Ci sono modifiche non salvate. Uscire lo stesso?", "Esci senza salvare")) router.push(destinazione);
+  }
 
   // --- calcoli dal vivo ---
   const aliquota = useMemo(() => {
@@ -174,7 +211,7 @@ export default function ModuloPreventivo(props: Props) {
     const costoOre = f.ore.reduce((somma, r) => somma + centesimiOre(r.ore, r.costo_orario), 0);
     const costoMateriali = f.materiali.reduce(
       (somma, r) =>
-        somma + centesimiMateriale(r.bobina ? (quantitaBobina(r.larghezza_m, r.metri_lineari) ?? 0) : r.quantita, r.costo_unitario),
+        somma + calcolaMateriale(r).centesimi,
       0
     );
     return { ore, costoOre, costoMateriali };
@@ -201,9 +238,9 @@ export default function ModuloPreventivo(props: Props) {
       nuovo.splice(indice + verso, 0, fase);
       return nuovo;
     });
-  const togliFase = (f: BozzaFase, numero: number) => {
+  const togliFase = async (f: BozzaFase, numero: number) => {
     const righe = f.ore.length + f.materiali.length;
-    if (righe && !window.confirm(`Togliere la fase ${numero} «${f.titolo || "senza titolo"}» con le sue ${righe} righe?`)) return;
+    if (righe && !(await chiedi(`Togliere la fase ${numero} «${f.titolo || "senza titolo"}» con le sue ${righe} righe?`, "Togli la fase"))) return;
     setFasi((elenco) => elenco.filter((x) => x.chiave !== f.chiave));
   };
 
@@ -217,6 +254,7 @@ export default function ModuloPreventivo(props: Props) {
 
   return (
     <div className="flex flex-col gap-5">
+      {finestra}
       {/* ---------------- Intestazione ---------------- */}
       <header className="flex flex-wrap items-center gap-3">
         <div className="min-w-0 flex-[1_1_320px]">
@@ -271,6 +309,7 @@ export default function ModuloPreventivo(props: Props) {
           stato={stato}
           archiviato={archiviato}
           modificato={modificato}
+          chiedi={chiedi}
         />
       )}
 
@@ -512,18 +551,13 @@ function Fase({ fase, numero, totale, costo, tariffe, mappaArticoli, cambia, spo
           chiave: nuovaChiave(),
           articolo_id: null,
           descrizione: "",
-          unita_misura: "pz",
-          bobina: false,
-          larghezza_m: "",
-          metri_lineari: "",
-          quantita: "",
-          costo_unitario: "",
+          ...materialeVuoto,
         },
       ],
     }));
   }
 
-  /** Materiale scritto o scelto dai suggerimenti: se è del catalogo, riempie unità, costo e bobina. */
+  /** Materiale scritto o scelto dai suggerimenti: se è del catalogo, riempie unità, costo, bobina o lastra. */
   function scegliMateriale(r: BozzaMateriale, testo: string) {
     const a = mappaArticoli.get(testo);
     if (!a) {
@@ -531,13 +565,40 @@ function Fase({ fase, numero, totale, costo, tariffe, mappaArticoli, cambia, spo
       return;
     }
     const bobina = a.larghezza_bobina_m !== null;
+    const lastra = a.lastra_larghezza_cm !== null;
     cambiaMateriale(r.chiave, {
       articolo_id: a.id,
       descrizione: a.descrizione,
       unita_misura: bobina ? "m2" : a.unita_misura,
       costo_unitario: perCampo(a.costo_unitario, 2, 4),
-      bobina,
+      formato: lastra ? "lastra" : bobina ? "bobina" : "normale",
       larghezza_m: bobina ? perCampo(a.larghezza_bobina_m, 0, 3) : r.larghezza_m,
+      ...(lastra && {
+        lastra_larghezza_cm: perCampo(a.lastra_larghezza_cm, 0, 1),
+        lastra_altezza_cm: perCampo(a.lastra_altezza_cm, 0, 1),
+        costo_lastra: perCampo(a.costo_unitario, 2, 4),
+      }),
+    });
+  }
+
+  /** Cambio di calcolo (quantità, bobina, lastra): la lastra parte dal prezzo già scritto. */
+  function cambiaFormato(r: BozzaMateriale, formato: Formato) {
+    // Tornando a "Quantità" da bobina o lastra si tengono quantità, unità e costo appena calcolati
+    // (es. 7,7 m2 × 7,6769): così il costo della riga non cambia e i numeri restano coerenti.
+    if (formato === "normale" && r.formato !== "normale") {
+      const c = calcolaMateriale(r);
+      cambiaMateriale(r.chiave, {
+        formato,
+        unita_misura: c.unita || "pz",
+        quantita: c.quantita === null ? r.quantita : perCampo(c.quantita, 0, 3),
+        costo_unitario: c.costoUnitario === null ? r.costo_unitario : perCampo(c.costoUnitario, 2, 4),
+      });
+      return;
+    }
+    cambiaMateriale(r.chiave, {
+      formato,
+      unita_misura: formato === "bobina" ? "m2" : r.unita_misura,
+      costo_lastra: formato === "lastra" && !r.costo_lastra ? r.costo_unitario : r.costo_lastra,
     });
   }
 
@@ -681,121 +742,144 @@ function Fase({ fase, numero, totale, costo, tariffe, mappaArticoli, cambia, spo
       {/* ----- materiali ----- */}
       {fase.materiali.length > 0 && (
         <div className="relative overflow-x-auto">
-          <table className="w-full min-w-[720px] text-sm">
+          {/* larghezze contenute: la tabella deve stare nella colonna delle fasi (≈ 650 px) senza scorrere */}
+          <table className="w-full min-w-[600px] text-sm">
             <thead>
               <tr className="border-b border-slate-200">
                 <th className={intestazione}>Materiale</th>
-                <th className={`${intestazione} w-52`}>Quantità</th>
-                <th className={`${intestazione} w-20`}>Unità</th>
-                <th className={`${intestazione} w-28 text-right`}>€ / unità</th>
-                <th className={`${intestazione} w-28 text-right`}>Costo</th>
+                <th className={`${intestazione} w-36`}>Quantità</th>
+                <th className={`${intestazione} w-16`}>Unità</th>
+                <th className={`${intestazione} w-24 text-right`}>€ / unità</th>
+                <th className={`${intestazione} w-24 text-right`}>Costo</th>
                 <th className="w-10"><span className="sr-only">Togli</span></th>
               </tr>
             </thead>
             <tbody>
               {fase.materiali.map((r, j) => {
-                const m2 = r.bobina ? quantitaBobina(r.larghezza_m, r.metri_lineari) : null;
+                const calcolo = calcolaMateriale(r);
+                const lastra = r.formato === "lastra";
+                const piccolo = `${campo} text-right`;
                 return (
-                  <tr key={r.chiave} className="border-b border-slate-100 align-top">
-                    <td className={cella}>
-                      <input
-                        aria-label={`Materiale, riga ${j + 1}`}
-                        list="elenco-articoli"
-                        value={r.descrizione}
-                        onChange={(e) => scegliMateriale(r, e.target.value)}
-                        placeholder="Dal catalogo o scritto a mano"
-                        required
-                        className={campo}
-                      />
-                      <span className="mt-1 flex flex-wrap items-center gap-x-3 text-xs text-slate-500">
-                        {r.articolo_id ? "Dal catalogo" : "Non a catalogo"}
-                        <label className="inline-flex items-center gap-1.5">
-                          <input
-                            type="checkbox"
-                            checked={r.bobina}
-                            onChange={(e) =>
-                              cambiaMateriale(r.chiave, {
-                                bobina: e.target.checked,
-                                unita_misura: e.target.checked ? "m2" : r.unita_misura,
-                              })
-                            }
-                            className="h-4 w-4"
-                          />
-                          In bobina (m² = larghezza × metri)
-                        </label>
-                      </span>
-                    </td>
-                    <td className={cella}>
-                      {r.bobina ? (
-                        <div className="flex flex-col gap-1">
-                          <div className="flex items-center gap-1">
-                            <input
-                              aria-label={`Larghezza bobina in metri, riga ${j + 1}`}
-                              inputMode="decimal"
-                              value={r.larghezza_m}
-                              onChange={(e) => cambiaMateriale(r.chiave, { larghezza_m: e.target.value })}
-                              placeholder="larg."
-                              className={`${campo} text-right`}
-                            />
-                            <span className="text-slate-500">×</span>
-                            <input
-                              aria-label={`Metri lineari, riga ${j + 1}`}
-                              inputMode="decimal"
-                              value={r.metri_lineari}
-                              onChange={(e) => cambiaMateriale(r.chiave, { metri_lineari: e.target.value })}
-                              placeholder="ml"
-                              className={`${campo} text-right`}
-                            />
-                          </div>
-                          <span className="text-right text-xs text-slate-500">
-                            = {m2 === null ? "—" : perCampo(m2, 2, 3)} m²
-                          </span>
-                        </div>
-                      ) : (
+                  <Fragment key={r.chiave}>
+                    <tr className={`align-top ${lastra ? "" : "border-b border-slate-100"}`}>
+                      <td className={cella}>
                         <input
-                          aria-label={`Quantità, riga ${j + 1}`}
-                          inputMode="decimal"
-                          value={r.quantita}
-                          onChange={(e) => cambiaMateriale(r.chiave, { quantita: e.target.value })}
-                          className={`${campo} text-right`}
+                          aria-label={`Materiale, riga ${j + 1}`}
+                          list="elenco-articoli"
+                          value={r.descrizione}
+                          onChange={(e) => scegliMateriale(r, e.target.value)}
+                          placeholder="Dal catalogo o scritto a mano"
+                          required
+                          className={campo}
                         />
-                      )}
-                    </td>
-                    <td className={cella}>
-                      <input
-                        aria-label={`Unità di misura, riga ${j + 1}`}
-                        value={r.bobina ? "m2" : r.unita_misura}
-                        readOnly={r.bobina}
-                        onChange={(e) => cambiaMateriale(r.chiave, { unita_misura: e.target.value })}
-                        className={campo}
-                      />
-                    </td>
-                    <td className={cella}>
-                      <input
-                        aria-label={`Euro per unità, riga ${j + 1}`}
-                        inputMode="decimal"
-                        value={r.costo_unitario}
-                        onChange={(e) => cambiaMateriale(r.chiave, { costo_unitario: e.target.value })}
-                        placeholder={r.articolo_id ? "dal catalogo" : ""}
-                        className={`${campo} text-right`}
-                      />
-                    </td>
-                    <td className={`${cella} pt-3.5 text-right whitespace-nowrap tabular-nums`}>
-                      {euro(inEuro(centesimiMateriale(r.bobina ? (m2 ?? 0) : r.quantita, r.costo_unitario)))}
-                    </td>
-                    <td className={cella}>
-                      {!solaLettura && (
-                        <button
-                          type="button"
-                          aria-label={`Togli il materiale ${j + 1}`}
-                          onClick={() => cambia((f) => ({ ...f, materiali: f.materiali.filter((x) => x.chiave !== r.chiave) }))}
-                          className={iconaTogli}
-                        >
-                          ✕
-                        </button>
-                      )}
-                    </td>
-                  </tr>
+                        <span className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-500">
+                          {r.articolo_id ? "Dal catalogo" : "Non a catalogo"}
+                          <label className="inline-flex items-center gap-1.5">
+                            Calcolo
+                            <select
+                              value={r.formato}
+                              onChange={(e) => cambiaFormato(r, e.target.value as Formato)}
+                              className="rounded border border-slate-300 bg-white px-1.5 py-1 text-xs text-slate-800"
+                            >
+                              <option value="normale">Quantità</option>
+                              <option value="bobina">Bobina (larghezza × metri)</option>
+                              <option value="lastra">Lastra (pezzi su lastra)</option>
+                            </select>
+                          </label>
+                        </span>
+                      </td>
+                      <td className={cella}>
+                        {r.formato === "bobina" ? (
+                          <div className="flex flex-col gap-1">
+                            <div className="flex items-center gap-1">
+                              <input
+                                aria-label={`Larghezza bobina in metri, riga ${j + 1}`}
+                                inputMode="decimal"
+                                value={r.larghezza_m}
+                                onChange={(e) => cambiaMateriale(r.chiave, { larghezza_m: e.target.value })}
+                                placeholder="larg."
+                                className={piccolo}
+                              />
+                              <span className="text-slate-500">×</span>
+                              <input
+                                aria-label={`Metri lineari, riga ${j + 1}`}
+                                inputMode="decimal"
+                                value={r.metri_lineari}
+                                onChange={(e) => cambiaMateriale(r.chiave, { metri_lineari: e.target.value })}
+                                placeholder="ml"
+                                className={piccolo}
+                              />
+                            </div>
+                            <span className="text-right text-xs text-slate-500">
+                              = {calcolo.quantita === null ? "—" : perCampo(calcolo.quantita, 2, 3)} m²
+                            </span>
+                          </div>
+                        ) : lastra ? (
+                          <span className="block pt-2 text-right font-medium tabular-nums">
+                            {calcolo.quantita === null ? "—" : perCampo(calcolo.quantita, 0, 3)}
+                          </span>
+                        ) : (
+                          <input
+                            aria-label={`Quantità, riga ${j + 1}`}
+                            inputMode="decimal"
+                            value={r.quantita}
+                            onChange={(e) => cambiaMateriale(r.chiave, { quantita: e.target.value })}
+                            className={piccolo}
+                          />
+                        )}
+                      </td>
+                      <td className={cella}>
+                        {r.formato === "normale" ? (
+                          <input
+                            aria-label={`Unità di misura, riga ${j + 1}`}
+                            value={r.unita_misura}
+                            onChange={(e) => cambiaMateriale(r.chiave, { unita_misura: e.target.value })}
+                            className={campo}
+                          />
+                        ) : (
+                          <span className="block pt-2 text-slate-600">{calcolo.unita}</span>
+                        )}
+                      </td>
+                      <td className={cella}>
+                        {lastra ? (
+                          <span className="block pt-2 text-right tabular-nums text-slate-600">
+                            {calcolo.costoUnitario === null ? "—" : perCampo(calcolo.costoUnitario, 2, 4)}
+                          </span>
+                        ) : (
+                          <input
+                            aria-label={`Euro per unità, riga ${j + 1}`}
+                            inputMode="decimal"
+                            value={r.costo_unitario}
+                            onChange={(e) => cambiaMateriale(r.chiave, { costo_unitario: e.target.value })}
+                            placeholder={r.articolo_id ? "dal catalogo" : ""}
+                            className={piccolo}
+                          />
+                        )}
+                      </td>
+                      <td className={`${cella} pt-3.5 text-right whitespace-nowrap tabular-nums`}>
+                        {euro(inEuro(calcolo.centesimi))}
+                      </td>
+                      <td className={cella}>
+                        {!solaLettura && (
+                          <button
+                            type="button"
+                            aria-label={`Togli il materiale ${j + 1}`}
+                            onClick={() => cambia((f) => ({ ...f, materiali: f.materiali.filter((x) => x.chiave !== r.chiave) }))}
+                            className={iconaTogli}
+                          >
+                            ✕
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                    {lastra && (
+                      <tr className="border-b border-slate-100">
+                        <td colSpan={6} className="px-2 pb-3">
+                          <RigaLastra r={r} numero={j + 1} calcolo={calcolo} cambia={(campi) => cambiaMateriale(r.chiave, campi)} />
+                        </td>
+                      </tr>
+                    )}
+                  </Fragment>
                 );
               })}
             </tbody>
@@ -816,18 +900,39 @@ function Fase({ fase, numero, totale, costo, tariffe, mappaArticoli, cambia, spo
 // ---------------------------------------------------------------------
 // Stato e archiviazione (titolare e ufficio). Moduli a parte: non toccano la bozza.
 // ---------------------------------------------------------------------
-function BarraStato({ id, stato, archiviato, modificato }: { id: string; stato: Stato; archiviato: boolean; modificato: boolean }) {
-  const bloccato = stato === "accettato" || stato === "rifiutato";
-  const fermo = modificato || archiviato;
+type PropsBarra = {
+  id: string;
+  stato: Stato;
+  archiviato: boolean;
+  modificato: boolean;
+  chiedi: (domanda: string, conferma?: string) => Promise<boolean>;
+};
 
-  function conferma(e: FormEvent<HTMLFormElement>, nuovo: Stato) {
-    const etichetta = STATI.find((x) => x.valore === nuovo)?.etichetta.toLowerCase();
-    const testo = bloccato
-      ? `Riportare il preventivo a «${etichetta}»? Tornerà modificabile.`
+function BarraStato({ id, stato, archiviato, modificato, chiedi }: PropsBarra) {
+  const bloccato = stato === "accettato" || stato === "rifiutato";
+  const [inCorso, avvia] = useTransition();
+  const fermo = modificato || archiviato || inCorso;
+
+  const dati = (campi: Record<string, string>) => {
+    const d = new FormData();
+    for (const [k, v] of Object.entries(campi)) d.set(k, v);
+    return d;
+  };
+
+  async function scegliStato(nuovo: Stato) {
+    const etichetta = STATI.find((x) => x.valore === nuovo)?.etichetta ?? nuovo;
+    const domanda = bloccato
+      ? `Riportare il preventivo a «${etichetta.toLowerCase()}»? Tornerà modificabile.`
       : nuovo === "accettato" || nuovo === "rifiutato"
-        ? `Segnare il preventivo come «${etichetta}»? Da quel momento non si potrà più modificare.`
+        ? `Segnare il preventivo come «${etichetta.toLowerCase()}»? Da quel momento non si potrà più modificare.`
         : null;
-    if (testo && !window.confirm(testo)) e.preventDefault();
+    if (domanda && !(await chiedi(domanda, `Sì, ${etichetta.toLowerCase()}`))) return;
+    avvia(() => cambiaStato(dati({ id, stato: nuovo })));
+  }
+
+  async function archivia() {
+    if (!archiviato && !(await chiedi("Archiviare il preventivo? Non comparirà più nell'elenco (si può ripristinare).", "Archivia"))) return;
+    avvia(() => archiviaPreventivo(dati({ id, attivo: archiviato ? "true" : "false" })));
   }
 
   return (
@@ -839,32 +944,98 @@ function BarraStato({ id, stato, archiviato, modificato }: { id: string; stato: 
             {x.etichetta}
           </span>
         ) : (
-          <form key={x.valore} action={cambiaStato} onSubmit={(e) => conferma(e, x.valore)}>
-            <input type="hidden" name="id" value={id} />
-            <input type="hidden" name="stato" value={x.valore} />
-            <button
-              disabled={fermo}
-              className="min-h-9 rounded-full border border-slate-300 bg-white px-3.5 font-semibold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              {x.etichetta}
-            </button>
-          </form>
+          <button
+            key={x.valore}
+            type="button"
+            disabled={fermo}
+            onClick={() => scegliStato(x.valore)}
+            className="min-h-9 rounded-full border border-slate-300 bg-white px-3.5 font-semibold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {x.etichetta}
+          </button>
         )
       )}
       {modificato && <span className="text-xs text-amber-800">Salva prima le modifiche</span>}
-      <form
-        action={archiviaPreventivo}
-        className="ml-auto"
-        onSubmit={(e) => {
-          if (!archiviato && !window.confirm("Archiviare il preventivo? Non comparirà più nell'elenco (si può ripristinare).")) e.preventDefault();
-        }}
+      {inCorso && <span className="text-xs text-slate-500">Un momento…</span>}
+      <button
+        type="button"
+        disabled={modificato || inCorso}
+        onClick={archivia}
+        className="ml-auto min-h-9 text-sm text-slate-600 hover:text-slate-900 hover:underline disabled:opacity-50"
       >
-        <input type="hidden" name="id" value={id} />
-        <input type="hidden" name="attivo" value={archiviato ? "true" : "false"} />
-        <button disabled={modificato} className="text-sm text-slate-600 hover:text-slate-900 hover:underline disabled:opacity-50">
-          {archiviato ? "Ripristina" : "Archivia"}
-        </button>
-      </form>
+        {archiviato ? "Ripristina" : "Archivia"}
+      </button>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------
+// Dati di una lastra: misure, pezzi, margine di taglio e come addebitarla
+// ---------------------------------------------------------------------
+type PropsLastra = {
+  r: BozzaMateriale;
+  numero: number;
+  calcolo: CalcoloMateriale;
+  cambia: (campi: Partial<BozzaMateriale>) => void;
+};
+
+// come "campo", ma senza larghezza piena: qui ogni campo ha la sua larghezza (w-16, w-20…)
+const campoStretto = campo.replace("w-full ", "");
+
+function RigaLastra({ r, numero, calcolo, cambia }: PropsLastra) {
+  const testo = (nome: keyof BozzaMateriale, etichettaCampo: string, larghezza = "w-20", unita?: string, nomeCampo = etichettaCampo) => (
+    <label className="flex flex-col gap-1 text-xs text-slate-500">
+      {etichettaCampo}
+      <span className="flex items-center gap-1">
+        <input
+          aria-label={`${nomeCampo}, materiale ${numero}`}
+          inputMode="decimal"
+          value={r[nome] as string}
+          onChange={(e) => cambia({ [nome]: e.target.value })}
+          className={`${campoStretto} ${larghezza} text-right`}
+        />
+        {unita && <span>{unita}</span>}
+      </span>
+    </label>
+  );
+
+  return (
+    <div className="flex flex-col gap-2 rounded-lg bg-slate-50 p-3">
+      <div className="flex flex-wrap items-end gap-x-4 gap-y-2">
+        <fieldset className="flex items-end gap-1">
+          <legend className="sr-only">Lastra</legend>
+          {testo("lastra_larghezza_cm", "Lastra (cm)", "w-20", undefined, "Larghezza lastra in cm")}
+          <span className="pb-2 text-slate-500">×</span>
+          {testo("lastra_altezza_cm", "\u00a0", "w-20", undefined, "Altezza lastra in cm")}
+        </fieldset>
+        {testo("costo_lastra", "Prezzo lastra", "w-24", "€")}
+        <fieldset className="flex items-end gap-1">
+          <legend className="sr-only">Pezzo</legend>
+          {testo("pezzo_larghezza_cm", "Pezzo (cm)", "w-20", undefined, "Larghezza pezzo in cm")}
+          <span className="pb-2 text-slate-500">×</span>
+          {testo("pezzo_altezza_cm", "\u00a0", "w-20", undefined, "Altezza pezzo in cm")}
+        </fieldset>
+        {testo("pezzi", "Pezzi", "w-16")}
+        {testo("margine_taglio_cm", "Margine taglio", "w-16", "cm")}
+        <label className="flex flex-col gap-1 text-xs text-slate-500">
+          Addebito
+          <select
+            aria-label={`Addebito della lastra, materiale ${numero}`}
+            value={r.addebito_lastra}
+            onChange={(e) => cambia({ addebito_lastra: e.target.value as BozzaMateriale["addebito_lastra"] })}
+            className={`${campoStretto} w-auto`}
+          >
+            <option value="lastre_intere">Lastre intere</option>
+            <option value="m2_usati">Solo m² usati + scarto</option>
+          </select>
+        </label>
+        {r.addebito_lastra === "m2_usati" && testo("scarto_percentuale", "Scarto", "w-16", "%")}
+      </div>
+      {calcolo.avviso ? (
+        <p role="alert" className="text-xs font-semibold text-red-700">{calcolo.avviso}</p>
+      ) : (
+        calcolo.spiegazione && <p className="text-xs text-slate-600">{calcolo.spiegazione}</p>
+      )}
     </div>
   );
 }

@@ -21,6 +21,8 @@ export type ArticoloScelto = {
   unita_misura: string;
   costo_unitario: number;
   larghezza_bobina_m: number | null;
+  lastra_larghezza_cm: number | null; // articolo a lastra: misure in cm, costo_unitario = prezzo della lastra
+  lastra_altezza_cm: number | null;
 };
 
 export type CodiceIvaScelto = { id: string; codice: string; descrizione: string; aliquota: number; attivo: boolean };
@@ -64,8 +66,23 @@ export type MaterialeSalvato = {
   metri_lineari: number | null;
   quantita: number;
   costo_unitario: number;
+  addebito_lastra: AddebitoLastra | null;
+  lastra_larghezza_cm: number | null;
+  lastra_altezza_cm: number | null;
+  costo_lastra: number | null;
+  pezzo_larghezza_cm: number | null;
+  pezzo_altezza_cm: number | null;
+  pezzi: number | null;
+  margine_taglio_cm: number;
+  scarto_percentuale: number;
   attivo: boolean;
 };
+
+/** Lastra: si pagano le lastre intere necessarie, oppure solo i m² dei pezzi + scarto. */
+export type AddebitoLastra = "lastre_intere" | "m2_usati";
+
+/** Come si calcola la quantità di un materiale. */
+export type Formato = "normale" | "bobina" | "lastra";
 
 export type FaseSalvata = {
   id: string;
@@ -91,11 +108,23 @@ export type BozzaMateriale = {
   articolo_id: string | null;
   descrizione: string;
   unita_misura: string;
-  bobina: boolean;
+  formato: Formato;
+  // bobina
   larghezza_m: string;
   metri_lineari: string;
+  // normale
   quantita: string;
   costo_unitario: string;
+  // lastra (misure in cm)
+  addebito_lastra: AddebitoLastra;
+  lastra_larghezza_cm: string;
+  lastra_altezza_cm: string;
+  costo_lastra: string;
+  pezzo_larghezza_cm: string;
+  pezzo_altezza_cm: string;
+  pezzi: string;
+  margine_taglio_cm: string;
+  scarto_percentuale: string;
 };
 
 export type BozzaFase = {

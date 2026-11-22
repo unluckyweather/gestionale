@@ -52,7 +52,7 @@ docs/                    questi documenti
 - I moduli lunghi sono componenti `"use client"` con `useActionState`: se il salvataggio non va, il modulo resta compilato e mostra l'errore.
 
 ## Regole
-1. **Il database si cambia solo con file in `supabase/migrations/`**, numerati in ordine (`0001_fondamenta.sql`, `0002_anagrafiche.sql`, `0003_preventivi.sql`…), mai a mano dal pannello. Così lo stesso schema si ricrea identico su `gestionale-prod`. Per ora una migrazione si applica incollando il file intero in Supabase → **SQL Editor** → Run (una volta sola per database). Una migrazione **non ancora applicata** da nessuna parte si può ancora correggere; una già applicata no (si crea la successiva).
+1. **Il database si cambia solo con file in `supabase/migrations/`**, numerati in ordine (`0001_fondamenta.sql`, `0002_anagrafiche.sql`, `0003_preventivi.sql`, `0004_lastre.sql`…), mai a mano dal pannello. Così lo stesso schema si ricrea identico su `gestionale-prod`. Per ora una migrazione si applica incollando il file intero in Supabase → **SQL Editor** → Run (una volta sola per database). Una migrazione **non ancora applicata** da nessuna parte si può ancora correggere; una già applicata no (si crea la successiva).
 2. **`docs/SCHEMA-DATABASE.md` è la fonte di verità** sulle tabelle: chi cambia una tabella lo aggiorna.
 3. Le **tabelle condivise** (`profili`, `dipendenti`, `soggetti`, `articoli`, `codici_iva`, `preventivi`, `numeratori`, `commesse`, `registro_modifiche`) si modificano con cautela: altre sezioni le usano.
 4. Interfaccia e nomi in **italiano**.
@@ -101,6 +101,8 @@ Ogni chat di sezione inizia con: *"Leggi ARCHITETTURA.md e SCHEMA-DATABASE.md, p
 - [x] Preventivi passo 2: tariffe orarie in Impostazioni (solo titolare), scritto (22/11) — da provare su `gestionale-dev`
 - [x] Preventivi passo 3: elenco con ricerca (cliente, numero, oggetto), filtri per stato con i numeri, "archiviati", anteprima con fasi e totali dalla vista `preventivi_riepilogo` (22/11) — da provare su `gestionale-dev` con `supabase/prove/dati_prova_preventivi.sql`
 - [x] Preventivi passo 4: pagina del preventivo (`?id=…`, `?id=nuovo`) con fasi, ore, materiali (catalogo o liberi, bobine) e riepilogo dal vivo con le stesse regole di arrotondamento del database (`preventivi/calcoli.ts`); salvataggio con `salva_preventivo`, cambio di stato, archivia/ripristina (22/11) — provato su `gestionale-dev` come titolare
+- [x] Preventivi: materiali a lastra (lastre intere o m² usati + scarto, margine di taglio): `0004_lastre.sql` scritta e provata in locale con PGlite (22/11); catalogo articoli con misure della lastra
+- [x] Preventivi: `0004_lastre.sql` applicata su `gestionale-dev` e provata nel browser (22/11): articolo a lastra nel catalogo, righe a lastre intere e a m² usati, totali uguali al database
 - [ ] Preventivi: passi 5–7
 - [ ] Produzione
 - [ ] Timbrature

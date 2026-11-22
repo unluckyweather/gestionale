@@ -97,18 +97,47 @@ export async function salvaPreventivo(_prima: EsitoSalvataggio, dati: FormData):
           const dove = `${nomeFase}, materiale riga ${j + 1}`;
           const articolo = idONull(r.articolo_id);
           if (!testo(r.descrizione) && !articolo) throw new ErroreDati(`${dove}: scrivi il materiale.`);
-          const larghezza = r.bobina ? numero(r.larghezza_m, `${dove}, larghezza`, 3) : null;
-          const metri = r.bobina ? numero(r.metri_lineari, `${dove}, metri lineari`, 3) : null;
-          if (r.bobina && (!larghezza || !metri)) throw new ErroreDati(`${dove}: per la bobina servono larghezza e metri lineari.`);
+          const bobina = r.formato === "bobina";
+          const lastra = r.formato === "lastra";
+          const larghezza = bobina ? numero(r.larghezza_m, `${dove}, larghezza`, 3) : null;
+          const metri = bobina ? numero(r.metri_lineari, `${dove}, metri lineari`, 3) : null;
+          if (bobina && (!larghezza || !metri)) throw new ErroreDati(`${dove}: per la bobina servono larghezza e metri lineari.`);
+
+          // lastra: quantità, unità e costo li calcola il database dalle misure
+          const cm = (v: string, campo: string) => {
+            const n = numero(v, `${dove}, ${campo}`, 1);
+            if (!n) throw new ErroreDati(`${dove}: scrivi ${campo} (in cm, maggiore di zero).`);
+            return n;
+          };
+          const datiLastra = lastra
+            ? {
+                addebito_lastra: r.addebito_lastra === "m2_usati" ? "m2_usati" : "lastre_intere",
+                lastra_larghezza_cm: cm(r.lastra_larghezza_cm, "larghezza della lastra"),
+                lastra_altezza_cm: cm(r.lastra_altezza_cm, "altezza della lastra"),
+                costo_lastra: numero(r.costo_lastra, `${dove}, prezzo della lastra`, 4), // vuoto → dal catalogo
+                pezzo_larghezza_cm: cm(r.pezzo_larghezza_cm, "larghezza del pezzo"),
+                pezzo_altezza_cm: cm(r.pezzo_altezza_cm, "altezza del pezzo"),
+                pezzi: numero(r.pezzi, `${dove}, pezzi`, 0),
+                margine_taglio_cm: numero(r.margine_taglio_cm, `${dove}, margine di taglio`, 1) ?? 0,
+                scarto_percentuale: numero(r.scarto_percentuale, `${dove}, scarto %`, 2) ?? 10,
+              }
+            : { addebito_lastra: null };
+          if (lastra && !(Number(datiLastra.pezzi) >= 1)) throw new ErroreDati(`${dove}: scrivi quanti pezzi servono.`);
+          if (lastra && datiLastra.costo_lastra === null && !articolo)
+            throw new ErroreDati(`${dove}: scrivi il prezzo della lastra.`);
+
           return {
             id: idONull(r.id),
             articolo_id: articolo,
             descrizione: oNull(r.descrizione),
-            unita_misura: oNull(r.unita_misura),
+            unita_misura: lastra ? null : oNull(r.unita_misura),
             larghezza_m: larghezza,
             metri_lineari: metri,
-            quantita: r.bobina ? null : (numero(r.quantita, `${dove}, quantità`, 3) ?? 0), // bobina: la calcola il database
-            costo_unitario: numero(r.costo_unitario, `${dove}, € / unità`, 4), // vuoto → copiato dall'articolo
+            // bobina e lastra: la quantità la calcola il database
+            quantita: bobina || lastra ? null : (numero(r.quantita, `${dove}, quantità`, 3) ?? 0),
+            // vuoto → copiato dall'articolo; lastra → calcolato dal database
+            costo_unitario: lastra ? null : numero(r.costo_unitario, `${dove}, € / unità`, 4),
+            ...datiLastra,
           };
         }),
       };

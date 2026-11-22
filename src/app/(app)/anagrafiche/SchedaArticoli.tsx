@@ -11,7 +11,7 @@ type Props = { q?: string; id?: string; archiviati: boolean; modificabile: boole
 
 type RigaElenco = Pick<
   Articolo,
-  "id" | "codice" | "descrizione" | "tipo" | "unita_misura" | "costo_unitario" | "larghezza_bobina_m" | "attivo"
+  "id" | "codice" | "descrizione" | "tipo" | "unita_misura" | "costo_unitario" | "larghezza_bobina_m" | "lastra_larghezza_cm" | "lastra_altezza_cm" | "attivo"
 > & {
   iva: { codice: string } | null;
   fornitore: { denominazione: string } | null;
@@ -24,7 +24,7 @@ export default async function SchedaArticoli({ q, id, archiviati, modificabile }
   let query = supabase
     .from("articoli")
     .select(
-      "id, codice, descrizione, tipo, unita_misura, costo_unitario, larghezza_bobina_m, attivo, iva:codici_iva(codice), fornitore:soggetti(denominazione)"
+      "id, codice, descrizione, tipo, unita_misura, costo_unitario, larghezza_bobina_m, lastra_larghezza_cm, lastra_altezza_cm, attivo, iva:codici_iva(codice), fornitore:soggetti(denominazione)"
     )
     .order("descrizione")
     .limit(500);
@@ -42,7 +42,7 @@ export default async function SchedaArticoli({ q, id, archiviati, modificabile }
       ? supabase
           .from("articoli")
           .select(
-            "id, codice, descrizione, tipo, unita_misura, costo_unitario, larghezza_bobina_m, codice_iva_id, fornitore_id, note, attivo, aggiornato_il"
+            "id, codice, descrizione, tipo, unita_misura, costo_unitario, larghezza_bobina_m, lastra_larghezza_cm, lastra_altezza_cm, codice_iva_id, fornitore_id, note, attivo, aggiornato_il"
           )
           .eq("id", id!)
           .maybeSingle()
@@ -104,6 +104,11 @@ export default async function SchedaArticoli({ q, id, archiviati, modificabile }
                       )}
                       {a.larghezza_bobina_m && (
                         <span className="ml-2 text-xs text-slate-500">bobina {Number(a.larghezza_bobina_m).toLocaleString("it-IT")} m</span>
+                      )}
+                      {a.lastra_larghezza_cm && (
+                        <span className="ml-2 text-xs text-slate-500">
+                          lastra {Number(a.lastra_larghezza_cm).toLocaleString("it-IT")}×{Number(a.lastra_altezza_cm).toLocaleString("it-IT")} cm
+                        </span>
                       )}
                       {!a.attivo && <span className="ml-2 text-xs">(archiviato)</span>}
                     </td>

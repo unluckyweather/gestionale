@@ -122,6 +122,8 @@ export type Articolo = {
   unita_misura: string;
   costo_unitario: number;
   larghezza_bobina_m: number | null;
+  lastra_larghezza_cm: number | null; // solo materiali a lastra (cm); costo_unitario = prezzo della lastra
+  lastra_altezza_cm: number | null;
   codice_iva_id: string | null;
   fornitore_id: string | null;
   note: string | null;

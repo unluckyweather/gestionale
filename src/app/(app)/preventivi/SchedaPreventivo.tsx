@@ -33,7 +33,7 @@ export default async function SchedaPreventivo({ id, modificabile, ok, errore }:
       : supabase
           .from("fasi_preventivo")
           .select(
-            "id, titolo, descrizione_cliente, ordine, ore_fase(id, fase_id, tariffa_id, ore, persone, costo_orario, attivo, ordine), materiali_fase(id, fase_id, articolo_id, descrizione, unita_misura, larghezza_m, metri_lineari, quantita, costo_unitario, attivo, ordine)"
+            "id, titolo, descrizione_cliente, ordine, ore_fase(id, fase_id, tariffa_id, ore, persone, costo_orario, attivo, ordine), materiali_fase(id, fase_id, articolo_id, descrizione, unita_misura, larghezza_m, metri_lineari, quantita, costo_unitario, addebito_lastra, lastra_larghezza_cm, lastra_altezza_cm, costo_lastra, pezzo_larghezza_cm, pezzo_altezza_cm, pezzi, margine_taglio_cm, scarto_percentuale, attivo, ordine)"
           )
           .eq("preventivo_id", id)
           .eq("attivo", true)
@@ -49,7 +49,7 @@ export default async function SchedaPreventivo({ id, modificabile, ok, errore }:
     supabase.from("tariffe_orarie").select("id, nome, costo_orario, attivo").order("tipo").order("nome"),
     supabase
       .from("articoli")
-      .select("id, codice, descrizione, unita_misura, costo_unitario, larghezza_bobina_m")
+      .select("id, codice, descrizione, unita_misura, costo_unitario, larghezza_bobina_m, lastra_larghezza_cm, lastra_altezza_cm")
       .eq("attivo", true)
       .order("descrizione")
       .limit(5000),
@@ -59,6 +59,18 @@ export default async function SchedaPreventivo({ id, modificabile, ok, errore }:
       .order("aliquota", { ascending: false })
       .order("codice"),
   ]);
+
+  // Se una lettura non va, NON si mostra un preventivo incompleto: salvandolo,
+  // le fasi che non si vedono verrebbero archiviate.
+  const letturaFallita = [risPreventivo, risFasi, risClienti, risTariffe, risArticoli, risIva].find(
+    (r) => "error" in r && r.error
+  ) as { error: { message: string } } | undefined;
+  if (letturaFallita) {
+    console.error("Lettura del preventivo non riuscita:", letturaFallita.error.message);
+    return (
+      <Avviso testo="Non riesco a leggere tutti i dati del preventivo dal database, quindi non lo mostro per evitare di salvarlo incompleto. Se è appena stata aggiunta una migrazione, controlla che sia applicata; altrimenti riprova tra poco." />
+    );
+  }
 
   const preventivo = (risPreventivo.data ?? null) as PreventivoSalvato | null;
   if (!nuovo && !preventivo) return <Avviso testo="Preventivo non trovato." />;

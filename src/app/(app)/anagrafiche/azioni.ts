@@ -327,6 +327,21 @@ export async function salvaArticolo(_prima: StatoModulo, dati: FormData): Promis
   if (larghezzaTesto && (larghezza === null || larghezza <= 0 || larghezza >= 1000))
     return sbaglio("La larghezza della bobina non è valida (in metri, es. 1,37).");
 
+  // lastra: tutte e due le misure in cm (es. 305 × 205), oppure nessuna
+  const misuraLastra = (campo: string) => {
+    const t = testo(dati, campo);
+    if (!t) return null;
+    const n = leggiNumero(t);
+    return n === null || n <= 0 || n >= 100000 ? NaN : Math.round(n * 10) / 10;
+  };
+  const lastraL = misuraLastra("lastra_larghezza_cm");
+  const lastraH = misuraLastra("lastra_altezza_cm");
+  if (Number.isNaN(lastraL) || Number.isNaN(lastraH))
+    return sbaglio("Le misure della lastra non sono valide (in centimetri, es. 305 e 205).");
+  if ((lastraL === null) !== (lastraH === null)) return sbaglio("Per la lastra scrivi sia la larghezza sia l'altezza.");
+  if (lastraL !== null && larghezza !== null)
+    return sbaglio("Un articolo è in bobina oppure a lastra: togli la larghezza della bobina o le misure della lastra.");
+
   const record = {
     codice: oNull(testo(dati, "codice")),
     descrizione: testo(dati, "descrizione"),
@@ -334,6 +349,8 @@ export async function salvaArticolo(_prima: StatoModulo, dati: FormData): Promis
     unita_misura: testo(dati, "unita_misura"),
     costo_unitario: costo,
     larghezza_bobina_m: larghezza,
+    lastra_larghezza_cm: lastraL,
+    lastra_altezza_cm: lastraH,
     codice_iva_id: oNull(testo(dati, "codice_iva_id")),
     fornitore_id: oNull(testo(dati, "fornitore_id")),
     note: oNull(testo(dati, "note")),

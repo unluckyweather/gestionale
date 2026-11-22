@@ -2,7 +2,7 @@
 
 > **Documento di riferimento condiviso.** Ogni chat del progetto lo legge prima di toccare il database.
 > Chi aggiunge o modifica una tabella aggiorna questo file nello stesso momento.
-> Stato: **v0.6** (22/11/2026) – Fondamenta in `0001_fondamenta.sql` e Anagrafiche in `0002_anagrafiche.sql` (entrambe applicate su `gestionale-dev`). Preventivi in `0003_preventivi.sql` (applicata su `gestionale-dev`). Le altre sezioni sono bozza.
+> Stato: **v0.7** (22/11/2026) – Fondamenta in `0001_fondamenta.sql` e Anagrafiche in `0002_anagrafiche.sql` (entrambe applicate su `gestionale-dev`). Preventivi in `0003_preventivi.sql` (applicata su `gestionale-dev`). Materiali a lastra in `0004_lastre.sql` (applicata su `gestionale-dev`). Le altre sezioni sono bozza.
 > Mockup confermato (19/11): https://claude.ai/artifact/B5LEbqMxrBA2FJXqQu8U4s — preventivi a fasi + scheda cliente/fornitore "proposta v3".
 
 ## Regole comuni a tutte le tabelle
@@ -199,6 +199,7 @@ Dati iniziali: Rimessa diretta (0), Bonifico 30 gg (30), Bonifico 60 gg (60).
 | unita_misura | text | obbligatoria, predefinito `pz`; tipiche `m2`, `ml`, `pz`, `foglio`, `lastra` |
 | costo_unitario | numeric(12,4) | ≥ 0, IVA esclusa, **4 decimali** |
 | larghezza_bobina_m | numeric(6,3) | solo materiali in bobina: m² = larghezza × metri lineari |
+| lastra_larghezza_cm, lastra_altezza_cm | numeric(7,1) | solo materiali a lastra (0004), entrambe o nessuna; allora `costo_unitario` = **prezzo della lastra intera**. Un articolo è in bobina oppure a lastra |
 | codice_iva_id | uuid → codici_iva | predefinito 22 |
 | fornitore_id | uuid → soggetti | facoltativo: fornitore abituale |
 | note | text | |
@@ -231,13 +232,14 @@ Dati confermati dall'utente (19/11): **più tariffe orarie** (persona/reparto/ma
 - Un preventivo **accettato o rifiutato non si modifica più** (né lui né fasi e righe): si può solo cambiarne lo stato o archiviarlo. Per rifarlo si duplica. Bozze e inviati si modificano.
 - **Margine in % sul prezzo al cliente** (348,42 € su 1.330 € = 26,2%).
 - Costo orario e costo dei materiali si **copiano** nella riga quando la si crea: se cambia una tariffa o un articolo, i preventivi già fatti non cambiano.
+- **Materiali a lastra** (es. 305×205 cm): si calcolano le lastre dai pezzi, e in ogni riga si sceglie se far pagare le lastre intere o solo i m² usati + scarto (predefinito 10%). C'è anche il margine di taglio (predefinito 0). Misure in cm. → `0004_lastre.sql`
 - Nella riga, **costo orario e costo del materiale sono modificabili** (proposti da tariffa e catalogo, si possono cambiare per i casi speciali).
 - Un preventivo accettato o rifiutato si può **riportare a bozza o inviato** da titolare e ufficio, con una conferma: torna modificabile.
 - PDF: prima una pagina da stampare ("Stampa → Salva come PDF"); file PDF vero e invio email alla fine (passo 7, serve un servizio di invio email).
 
 Il PDF/email si invia ai contatti del cliente con `riceve_preventivi = true`.
 
-Enum nuovi: `tipo_tariffa` (`persona`, `macchina`, `posa`), `stato_preventivo` (`bozza`, `inviato`, `accettato`, `rifiutato`).
+Enum nuovi: `tipo_tariffa` (`persona`, `macchina`, `posa`), `stato_preventivo` (`bozza`, `inviato`, `accettato`, `rifiutato`); con la 0004 `addebito_lastra` (`lastre_intere`, `m2_usati`).
 
 ### `numeratori` — nuova (ultimo numero usato)
 | campo | tipo | note |
@@ -307,6 +309,18 @@ Modificabili solo dal titolare (in Impostazioni); lette da ufficio e contabilit�
 | larghezza_m, metri_lineari | numeric | solo bobine, entrambi o nessuno: allora **quantità = larghezza × metri lineari** (in m², la calcola il database) |
 | quantita | numeric(12,3) | |
 | costo_unitario | numeric(12,4) | se vuoto alla creazione: **copiato** dall'articolo |
+| addebito_lastra | addebito_lastra | (0004) vuoto = non è una lastra; `lastre_intere` o `m2_usati` |
+| lastra_larghezza_cm, lastra_altezza_cm | numeric(7,1) | misure della lastra; se vuote: dall'articolo |
+| costo_lastra | numeric(12,4) | prezzo della lastra intera; se vuoto: dall'articolo |
+| pezzo_larghezza_cm, pezzo_altezza_cm, pezzi | numeric(7,1), int | misura e numero dei pezzi da ricavare |
+| margine_taglio_cm | numeric(5,1) | spazio tra i pezzi, predefinito 0 |
+| scarto_percentuale | numeric(5,2) | solo `m2_usati`, predefinito 10 |
+
+> **Lastre (0004):** i dati della lastra ci sono tutti o nessuno; una riga è in bobina oppure a lastra. Il database (trigger `a_normalizza`, funzione `pezzi_per_lastra`) calcola quanti pezzi stanno in una lastra, righe × colonne, tutti dritti o tutti ruotati (il migliore). Il margine conta solo **tra** i pezzi. Poi:
+> - `lastre_intere` → quantità = lastre necessarie (arrotondate in su), unità `lastra`, costo unitario = prezzo della lastra;
+> - `m2_usati` → quantità = m² dei pezzi × (1 + scarto %), con 3 decimali, unità `m2`, costo unitario = prezzo lastra ÷ m² della lastra, con 4 decimali.
+>
+> Esempio: Forex 305×205 a 48 €, 10 pezzi 100×70 → 8 per lastra → 2 lastre = 96,00 €; oppure 7,70 m² × 7,6769 = 59,11 €. Con margine 10 cm → 4 per lastra → 3 lastre = 144,00 €. Se il pezzo non entra, il salvataggio dà errore. Gli stessi calcoli dal vivo stanno in `src/app/(app)/preventivi/calcoli.ts`.
 
 ### `modelli_lavorazione` — nuova
 `nome` (unico tra gli attivi), `descrizione`, `ricarico_percentuale` (predefinito 35), `note`. Le fasi stanno in `fasi_preventivo` con `modello_id`. Esempi: "Insegna luminosa", "Adesivo prespaziato", "Banner PVC con occhielli", "Wrapping furgone", "Bandiera a goccia".
