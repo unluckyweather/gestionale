@@ -4,6 +4,7 @@ import Link from "next/link";
 import { creaClientServer } from "@/lib/supabase/server";
 import { euro } from "@/lib/validazioni";
 import { pulsante, pulsanteSecondario, riquadro } from "../anagrafiche/stile";
+import PulsanteDuplica from "./PulsanteDuplica";
 import { EtichettaStato, dataItaliana, indirizzo, ore, percento, type Stato } from "./comuni";
 
 type Client = Awaited<ReturnType<typeof creaClientServer>>;
@@ -162,7 +163,8 @@ export default async function AnteprimaPreventivo({ supabase, id, modificabile, 
         <Link href={indirizzo({ id: p.id })} className={`${pulsante} flex flex-[1_1_100%] items-center justify-center`}>
           {modificabile && !bloccato ? "Apri e modifica" : "Apri"}
         </Link>
-        {["Duplica", "Scarica PDF", "Invia via email"].map((testo) => (
+        {modificabile && <PulsanteDuplica id={p.id} numero={p.numero} />}
+        {["Scarica PDF", "Invia via email"].map((testo) => (
           <button
             key={testo}
             type="button"
@@ -175,7 +177,7 @@ export default async function AnteprimaPreventivo({ supabase, id, modificabile, 
         ))}
       </div>
       <p className="text-xs text-slate-500">
-        Duplica, PDF ed email sono in arrivo. Ore, costi e margine restano interni: il cliente vedrà solo fasi e prezzo.
+        PDF ed email sono in arrivo. Ore, costi e margine restano interni: il cliente vedrà solo fasi e prezzo.
       </p>
     </section>
   );

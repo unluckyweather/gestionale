@@ -47,6 +47,8 @@ docs/                    questi documenti
 ```
 
 ### Com'è fatta una scheda (esempio: `anagrafiche/`)
+> In `preventivi/` le parti comuni a preventivi e modelli stanno in: `bozze.ts` (fasi dal database al modulo, copia, costi di oggi, totali), `calcoli.ts` (conti con gli arrotondamenti del database), `perDatabase.ts` (controlli e conversione prima del salvataggio), `letture.ts` (letture condivise), `ElencoFasi.tsx` (fasi, ore, materiali, lastre), `Conferma.tsx` (finestre di conferma dentro la pagina: `window.confirm` non funziona in tutti i browser).
+
 - `page.tsx` legge l'indirizzo (`?scheda=clienti&id=…&q=…`) e mostra la parte giusta: la scheda aperta e la riga scelta stanno nell'indirizzo, così "Indietro" del browser funziona.
 - `azioni.ts` (`"use server"`) contiene i salvataggi: controllano il ruolo, validano, scrivono e tornano alla pagina con un messaggio.
 - I moduli lunghi sono componenti `"use client"` con `useActionState`: se il salvataggio non va, il modulo resta compilato e mostra l'errore.
@@ -103,7 +105,8 @@ Ogni chat di sezione inizia con: *"Leggi ARCHITETTURA.md e SCHEMA-DATABASE.md, p
 - [x] Preventivi passo 4: pagina del preventivo (`?id=…`, `?id=nuovo`) con fasi, ore, materiali (catalogo o liberi, bobine) e riepilogo dal vivo con le stesse regole di arrotondamento del database (`preventivi/calcoli.ts`); salvataggio con `salva_preventivo`, cambio di stato, archivia/ripristina (22/11) — provato su `gestionale-dev` come titolare
 - [x] Preventivi: materiali a lastra (lastre intere o m² usati + scarto, margine di taglio): `0004_lastre.sql` scritta e provata in locale con PGlite (22/11); catalogo articoli con misure della lastra
 - [x] Preventivi: `0004_lastre.sql` applicata su `gestionale-dev` e provata nel browser (22/11): articolo a lastra nel catalogo, righe a lastre intere e a m² usati, totali uguali al database
-- [ ] Preventivi: passi 5–7
+- [x] Preventivi passo 5 (22/11): scheda «Modelli di lavorazione» (elenco con costo e prezzo indicativi ai costi di oggi, pagina del modello, archivia/ripristina); nel preventivo «Parti da un modello» (aggiungi o sostituisci le fasi, costi di oggi), «Salva come modello» e «Duplica» (nuova bozza, si sceglie se tenere i costi o aggiornarli a oggi; il prezzo corretto a mano non si copia). Nessuna migrazione nuova. Provato su `gestionale-dev` come titolare
+- [ ] Preventivi: passi 6–7
 - [ ] Produzione
 - [ ] Timbrature
 - [ ] Dashboard

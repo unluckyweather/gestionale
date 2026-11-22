@@ -155,3 +155,22 @@ export type DatiModulo = { id: string | null; testata: BozzaTestata; fasi: Bozza
 
 /** Risposta del salvataggio: se va bene si cambia pagina, se no torna l'errore (la bozza resta nel modulo). */
 export type EsitoSalvataggio = { errore?: string };
+
+// ----- Modelli di lavorazione -----
+export type ModelloSalvato = {
+  id: string;
+  nome: string;
+  descrizione: string | null;
+  ricarico_percentuale: number;
+  note: string | null;
+  attivo: boolean;
+  aggiornato_il: string;
+};
+
+export type BozzaModello = { nome: string; descrizione: string; ricarico_percentuale: string; note: string };
+
+/** Quello che il modulo del modello manda al salvataggio. */
+export type DatiModello = { id: string | null; testata: BozzaModello; fasi: BozzaFase[] };
+
+/** Un modello letto per "Parti da un modello": ricarico e fasi. */
+export type ModelloLetto = { errore?: string; ricarico_percentuale?: number; fasi?: FaseSalvata[] };

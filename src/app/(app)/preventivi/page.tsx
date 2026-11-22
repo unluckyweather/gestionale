@@ -1,7 +1,8 @@
 // Preventivi: elenco con ricerca, filtro per stato e anteprima del preventivo scelto.
 // Vedono la scheda titolare, ufficio e contabilità; creano e modificano titolare e ufficio
 // (lo impone anche il database con la Row Level Security).
-// Indirizzi: ?stato=bozza&q=…&archiviati=1&sel=<id> (anteprima) · ?id=<id> o ?id=nuovo (pagina del preventivo).
+// Indirizzi: ?stato=bozza&q=…&archiviati=1&sel=<id> (anteprima) · ?id=<id> o ?id=nuovo (pagina del preventivo)
+//            ?scheda=modelli (elenco modelli) · ?scheda=modelli&id=<id> o id=nuovo (pagina del modello).
 import Link from "next/link";
 import { richiediSezione } from "@/lib/utente";
 import { creaClientServer } from "@/lib/supabase/server";
@@ -10,9 +11,12 @@ import { campo, pulsante, pulsanteSecondario } from "../anagrafiche/stile";
 import ElencoPreventivi, { filtroRicerca } from "./ElencoPreventivi";
 import AnteprimaPreventivo from "./AnteprimaPreventivo";
 import SchedaPreventivo from "./SchedaPreventivo";
+import ElencoModelli from "./ElencoModelli";
+import SchedaModello from "./SchedaModello";
 import { STATI, eStato, indirizzo, type Stato } from "./comuni";
 
 type Parametri = {
+  scheda?: string;
   stato?: string;
   q?: string;
   archiviati?: string;
@@ -27,8 +31,43 @@ export default async function Preventivi({ searchParams }: { searchParams: Promi
   const p = await searchParams;
   const modificabile = io.ruolo === "titolare" || io.ruolo === "ufficio";
 
-  // Pagina del singolo preventivo (o nuovo)
+  const modelli = p.scheda === "modelli";
+
+  // Pagina del singolo modello o preventivo (o nuovo)
+  if (modelli && p.id) return <SchedaModello id={p.id} modificabile={modificabile} ok={p.ok} errore={p.errore} />;
   if (p.id) return <SchedaPreventivo id={p.id} modificabile={modificabile} ok={p.ok} errore={p.errore} />;
+
+  // Elenco dei modelli
+  if (modelli) {
+    const archiviatiModelli = p.archiviati === "1";
+    return (
+      <div className="flex flex-col gap-5">
+        <header className="flex flex-wrap items-center gap-3">
+          <Titolo />
+          {modificabile && (
+            <Link href={indirizzo({ scheda: "modelli", id: "nuovo" })} className={`${pulsante} inline-flex items-center`}>
+              + Nuovo modello
+            </Link>
+          )}
+        </header>
+        <Messaggi ok={p.ok} errore={p.errore} />
+        <Schede attiva="modelli" />
+        <div className="-mt-2 text-sm">
+          <Link
+            href={indirizzo({ scheda: "modelli", archiviati: archiviatiModelli ? undefined : "1" })}
+            className="text-slate-500 hover:text-slate-800 hover:underline"
+          >
+            {archiviatiModelli ? "Nascondi gli archiviati" : "Mostra anche gli archiviati"}
+          </Link>
+        </div>
+        <p className="-mt-2 text-sm text-slate-500">
+          Un modello raccoglie le fasi tipiche di un lavoro (es. Insegna luminosa). Nel preventivo si sceglie in «Parti da un
+          modello»: le fasi arrivano con le tariffe e i costi di oggi.
+        </p>
+        <ElencoModelli archiviati={archiviatiModelli} />
+      </div>
+    );
+  }
 
   const stato: Stato | null = eStato(p.stato) ? p.stato : null;
   const ricerca = pulisciRicerca(p.q);
@@ -56,10 +95,7 @@ export default async function Preventivi({ searchParams }: { searchParams: Promi
   return (
     <div className="flex flex-col gap-5">
       <header className="flex flex-wrap items-center gap-3">
-        <div className="min-w-60 flex-1">
-          <h1 className="text-2xl font-semibold">Preventivi</h1>
-          <p className="mt-1 text-sm text-slate-500">Lavorazioni su misura: fasi, ore e materiali</p>
-        </div>
+        <Titolo />
         <form action="/preventivi" role="search" className="flex gap-2">
           {stato && <input type="hidden" name="stato" value={stato} />}
           {archiviati && <input type="hidden" name="archiviati" value="1" />}
@@ -80,8 +116,8 @@ export default async function Preventivi({ searchParams }: { searchParams: Promi
         )}
       </header>
 
-      {p.ok && <p role="status" className="rounded-lg bg-green-50 px-4 py-3 text-sm text-green-800">{p.ok}</p>}
-      {p.errore && <p role="alert" className="rounded-lg bg-red-50 px-4 py-3 text-sm text-red-800">{p.errore}</p>}
+      <Messaggi ok={p.ok} errore={p.errore} />
+      <Schede attiva="preventivi" />
 
       <nav aria-label="Filtra per stato" className="flex flex-wrap gap-2">
         {filtriStato.map((f) => {
@@ -138,5 +174,49 @@ export default async function Preventivi({ searchParams }: { searchParams: Promi
         )}
       </div>
     </div>
+  );
+}
+
+function Titolo() {
+  return (
+    <div className="min-w-60 flex-1">
+      <h1 className="text-2xl font-semibold">Preventivi</h1>
+      <p className="mt-1 text-sm text-slate-500">Lavorazioni su misura: fasi, ore e materiali</p>
+    </div>
+  );
+}
+
+function Messaggi({ ok, errore }: { ok?: string; errore?: string }) {
+  return (
+    <>
+      {ok && <p role="status" className="rounded-lg bg-green-50 px-4 py-3 text-sm text-green-800">{ok}</p>}
+      {errore && <p role="alert" className="rounded-lg bg-red-50 px-4 py-3 text-sm text-red-800">{errore}</p>}
+    </>
+  );
+}
+
+/** Schede "Preventivi · Modelli" (stesso aspetto di Anagrafiche). */
+function Schede({ attiva }: { attiva: "preventivi" | "modelli" }) {
+  const schede = [
+    { chiave: "preventivi", etichetta: "Preventivi", href: indirizzo({}) },
+    { chiave: "modelli", etichetta: "Modelli di lavorazione", href: indirizzo({ scheda: "modelli" }) },
+  ];
+  return (
+    <nav aria-label="Sezioni dei preventivi" className="-mb-px flex gap-1 overflow-x-auto border-b border-slate-300">
+      {schede.map((x) => (
+        <Link
+          key={x.chiave}
+          href={x.href}
+          aria-current={x.chiave === attiva ? "page" : undefined}
+          className={`border-b-[3px] px-4 py-3 text-sm whitespace-nowrap ${
+            x.chiave === attiva
+              ? "border-blue-600 font-bold text-slate-900"
+              : "border-transparent font-semibold text-slate-600 hover:text-slate-900"
+          }`}
+        >
+          {x.etichetta}
+        </Link>
+      ))}
+    </nav>
   );
 }

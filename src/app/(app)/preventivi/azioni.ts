@@ -7,34 +7,11 @@ import { redirect } from "next/navigation";
 import type { PostgrestError } from "@supabase/supabase-js";
 import { richiediRuolo } from "@/lib/utente";
 import { creaClientServer } from "@/lib/supabase/server";
-import { leggiValore } from "./calcoli";
-import { eStato, indirizzo } from "./comuni";
-import type { DatiModulo, EsitoSalvataggio } from "./tipi";
-
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-const DATA = /^\d{4}-\d{2}-\d{2}$/;
-
-class ErroreDati extends Error {}
-
-const testo = (v: unknown) => String(v ?? "").trim();
-const oNull = (v: unknown) => testo(v) || null;
-const idONull = (v: unknown) => (UUID.test(testo(v)) ? testo(v) : null);
-
-/** Numero scritto nel campo → numero; vuoto → null; sbagliato → errore con il nome del campo. */
-function numero(v: string, campo: string, decimali: number): number | null {
-  if (!testo(v)) return null;
-  const n = leggiValore(v);
-  if (n === null) throw new ErroreDati(`${campo}: «${v}» non è un numero valido (es. 12 o 12,50).`);
-  return Math.round(n * 10 ** decimali) / 10 ** decimali;
-}
-
-function spiegaErrore(errore: PostgrestError): string {
-  if (errore.code === "P0001") return errore.message; // messaggi scritti nei trigger (es. preventivo bloccato)
-  if (errore.code === "23514") return "Controlla i dati: c'è un valore fuori dai limiti (es. numero negativo o validità prima della data).";
-  if (errore.code === "23503") return "Un dato scelto non esiste più (cliente, tariffa o articolo): ricarica la pagina.";
-  if (errore.code === "42501") return "Non hai i permessi per modificare questo preventivo.";
-  return "Salvataggio non riuscito. Riprova.";
-}
+import { aggiornaCosti, bozzaFasi, copiaFasi } from "./bozze";
+import { eStato, indirizzo, oggiItalia } from "./comuni";
+import { leggiFasi, leggiTariffeArticoli } from "./letture";
+import { DATA, ErroreDati, fasiPerDatabase, idONull, numero, oNull, spiegaErrore, testo } from "./perDatabase";
+import type { BozzaFase, DatiModello, DatiModulo, EsitoSalvataggio, FaseSalvata, ModelloLetto } from "./tipi";
 
 // ---------------------------------------------------------------------
 // Salva il preventivo intero (testata, fasi, ore e materiali) in un colpo solo.
@@ -73,75 +50,7 @@ export async function salvaPreventivo(_prima: EsitoSalvataggio, dati: FormData):
       note: oNull(t.note),
     };
 
-    fasi = (modulo.fasi ?? []).map((f, i) => {
-      const nomeFase = `Fase ${i + 1}`;
-      if (!testo(f.titolo)) throw new ErroreDati(`${nomeFase}: scrivi il titolo.`);
-      return {
-        id: idONull(f.id),
-        titolo: testo(f.titolo),
-        descrizione_cliente: oNull(f.descrizione_cliente),
-        ore: f.ore.map((r, j) => {
-          const dove = `${nomeFase}, ore riga ${j + 1}`;
-          if (!idONull(r.tariffa_id)) throw new ErroreDati(`${dove}: scegli la tariffa.`);
-          const persone = numero(r.persone, `${dove}, persone`, 0);
-          if (persone !== null && (persone < 1 || persone > 99)) throw new ErroreDati(`${dove}: persone da 1 a 99.`);
-          return {
-            id: idONull(r.id),
-            tariffa_id: testo(r.tariffa_id),
-            ore: numero(r.ore, `${dove}, ore`, 2) ?? 0,
-            persone,
-            costo_orario: numero(r.costo_orario, `${dove}, € / ora`, 2), // vuoto → copiato dalla tariffa
-          };
-        }),
-        materiali: f.materiali.map((r, j) => {
-          const dove = `${nomeFase}, materiale riga ${j + 1}`;
-          const articolo = idONull(r.articolo_id);
-          if (!testo(r.descrizione) && !articolo) throw new ErroreDati(`${dove}: scrivi il materiale.`);
-          const bobina = r.formato === "bobina";
-          const lastra = r.formato === "lastra";
-          const larghezza = bobina ? numero(r.larghezza_m, `${dove}, larghezza`, 3) : null;
-          const metri = bobina ? numero(r.metri_lineari, `${dove}, metri lineari`, 3) : null;
-          if (bobina && (!larghezza || !metri)) throw new ErroreDati(`${dove}: per la bobina servono larghezza e metri lineari.`);
-
-          // lastra: quantità, unità e costo li calcola il database dalle misure
-          const cm = (v: string, campo: string) => {
-            const n = numero(v, `${dove}, ${campo}`, 1);
-            if (!n) throw new ErroreDati(`${dove}: scrivi ${campo} (in cm, maggiore di zero).`);
-            return n;
-          };
-          const datiLastra = lastra
-            ? {
-                addebito_lastra: r.addebito_lastra === "m2_usati" ? "m2_usati" : "lastre_intere",
-                lastra_larghezza_cm: cm(r.lastra_larghezza_cm, "larghezza della lastra"),
-                lastra_altezza_cm: cm(r.lastra_altezza_cm, "altezza della lastra"),
-                costo_lastra: numero(r.costo_lastra, `${dove}, prezzo della lastra`, 4), // vuoto → dal catalogo
-                pezzo_larghezza_cm: cm(r.pezzo_larghezza_cm, "larghezza del pezzo"),
-                pezzo_altezza_cm: cm(r.pezzo_altezza_cm, "altezza del pezzo"),
-                pezzi: numero(r.pezzi, `${dove}, pezzi`, 0),
-                margine_taglio_cm: numero(r.margine_taglio_cm, `${dove}, margine di taglio`, 1) ?? 0,
-                scarto_percentuale: numero(r.scarto_percentuale, `${dove}, scarto %`, 2) ?? 10,
-              }
-            : { addebito_lastra: null };
-          if (lastra && !(Number(datiLastra.pezzi) >= 1)) throw new ErroreDati(`${dove}: scrivi quanti pezzi servono.`);
-          if (lastra && datiLastra.costo_lastra === null && !articolo)
-            throw new ErroreDati(`${dove}: scrivi il prezzo della lastra.`);
-
-          return {
-            id: idONull(r.id),
-            articolo_id: articolo,
-            descrizione: oNull(r.descrizione),
-            unita_misura: lastra ? null : oNull(r.unita_misura),
-            larghezza_m: larghezza,
-            metri_lineari: metri,
-            // bobina e lastra: la quantità la calcola il database
-            quantita: bobina || lastra ? null : (numero(r.quantita, `${dove}, quantità`, 3) ?? 0),
-            // vuoto → copiato dall'articolo; lastra → calcolato dal database
-            costo_unitario: lastra ? null : numero(r.costo_unitario, `${dove}, € / unità`, 4),
-            ...datiLastra,
-          };
-        }),
-      };
-    });
+    fasi = fasiPerDatabase(modulo.fasi);
   } catch (e) {
     if (e instanceof ErroreDati) return { errore: e.message };
     return { errore: "Dati del modulo non validi. Ricarica la pagina." };
@@ -195,4 +104,164 @@ export async function archiviaPreventivo(dati: FormData) {
 
   revalidatePath("/preventivi");
   torna(id, attivo ? "Preventivo ripristinato." : "Preventivo archiviato.");
+}
+
+
+// ---------------------------------------------------------------------
+// Modelli di lavorazione: salvataggio e archiviazione (titolare e ufficio)
+// ---------------------------------------------------------------------
+function testataModello(t: DatiModello["testata"]) {
+  if (!testo(t.nome)) throw new ErroreDati("Scrivi il nome del modello.");
+  return {
+    nome: testo(t.nome),
+    descrizione: oNull(t.descrizione),
+    ricarico_percentuale: numero(t.ricarico_percentuale, "Ricarico %", 2) ?? 35,
+    note: oNull(t.note),
+  };
+}
+
+function spiegaErroreModello(errore: Parameters<typeof spiegaErrore>[0]): string {
+  if (errore.code === "23505") return "Esiste già un modello attivo con questo nome.";
+  return spiegaErrore(errore);
+}
+
+export async function salvaModello(_prima: EsitoSalvataggio, dati: FormData): Promise<EsitoSalvataggio> {
+  await richiediRuolo("titolare", "ufficio");
+  let modulo: DatiModello;
+  try {
+    modulo = JSON.parse(String(dati.get("dati") ?? ""));
+  } catch {
+    return { errore: "Dati del modulo non leggibili. Ricarica la pagina." };
+  }
+
+  let modello: Record<string, unknown>;
+  let fasi: unknown[];
+  try {
+    modello = testataModello(modulo.testata);
+    fasi = fasiPerDatabase(modulo.fasi);
+  } catch (e) {
+    if (e instanceof ErroreDati) return { errore: e.message };
+    return { errore: "Dati del modulo non validi. Ricarica la pagina." };
+  }
+
+  const supabase = await creaClientServer();
+  const { data: id, error } = await supabase.rpc("salva_modello", { p_id: idONull(modulo.id), p_modello: modello, p_fasi: fasi });
+  if (error) return { errore: spiegaErroreModello(error) };
+
+  revalidatePath("/preventivi");
+  redirect(indirizzo({ scheda: "modelli", id: String(id), ok: modulo.id ? "Modello salvato." : "Modello creato." }));
+}
+
+export async function archiviaModello(dati: FormData) {
+  await richiediRuolo("titolare", "ufficio");
+  const id = idONull(dati.get("id"));
+  if (!id) redirect(indirizzo({ scheda: "modelli" }));
+  const attivo = dati.get("attivo") === "true";
+
+  const supabase = await creaClientServer();
+  const { data, error } = await supabase.from("modelli_lavorazione").update({ attivo }).eq("id", id).select("id");
+  const messaggio = error
+    ? spiegaErroreModello(error)
+    : !data?.length
+      ? "Modello non trovato o permessi insufficienti."
+      : attivo
+        ? "Modello ripristinato."
+        : "Modello archiviato.";
+  revalidatePath("/preventivi");
+  redirect(indirizzo({ scheda: "modelli", id, [error || !data?.length ? "errore" : "ok"]: messaggio }));
+}
+
+// ---------------------------------------------------------------------
+// "Parti da un modello": legge ricarico e fasi (il modulo poi aggiorna i costi a oggi)
+// ---------------------------------------------------------------------
+export async function leggiModello(id: string): Promise<ModelloLetto> {
+  await richiediRuolo("titolare", "ufficio");
+  if (!idONull(id)) return { errore: "Modello non valido." };
+  const supabase = await creaClientServer();
+  const [{ data: modello, error }, fasi] = await Promise.all([
+    supabase.from("modelli_lavorazione").select("ricarico_percentuale").eq("id", id).maybeSingle(),
+    leggiFasi(supabase, { modelli: [id] }),
+  ]);
+  if (error || !modello || fasi === null) return { errore: "Non riesco a leggere il modello. Riprova." };
+  return { ricarico_percentuale: Number(modello.ricarico_percentuale), fasi: fasi as FaseSalvata[] };
+}
+
+// ---------------------------------------------------------------------
+// "Salva come modello": un nuovo modello con le fasi del preventivo (come sono nella pagina)
+// ---------------------------------------------------------------------
+export async function salvaComeModello(dati: { nome: string; ricarico_percentuale: string; fasi: BozzaFase[] }): Promise<EsitoSalvataggio> {
+  await richiediRuolo("titolare", "ufficio");
+  let fasi: unknown[];
+  let modello: Record<string, unknown>;
+  try {
+    modello = testataModello({ nome: dati.nome, descrizione: "", ricarico_percentuale: dati.ricarico_percentuale, note: "" });
+    // fasi NUOVE: senza gli id del preventivo
+    fasi = fasiPerDatabase(copiaFasi(dati.fasi));
+  } catch (e) {
+    if (e instanceof ErroreDati) return { errore: e.message };
+    return { errore: "Dati non validi. Ricarica la pagina." };
+  }
+  const supabase = await creaClientServer();
+  const { data: id, error } = await supabase.rpc("salva_modello", { p_id: null, p_modello: modello, p_fasi: fasi });
+  if (error) return { errore: spiegaErroreModello(error) };
+  revalidatePath("/preventivi");
+  redirect(indirizzo({ scheda: "modelli", id: String(id), ok: `Modello «${modello.nome}» creato dal preventivo.` }));
+}
+
+// ---------------------------------------------------------------------
+// "Duplica": nuova bozza con numero nuovo, data di oggi, stesse fasi e righe.
+// Il prezzo corretto a mano NON si copia (riparte dal calcolato).
+// costi: "originali" = come nel preventivo copiato; "attuali" = tariffe e catalogo di oggi.
+// ---------------------------------------------------------------------
+export async function duplicaPreventivo(id: string, costi: "originali" | "attuali"): Promise<EsitoSalvataggio> {
+  await richiediRuolo("titolare", "ufficio");
+  if (!idONull(id)) return { errore: "Preventivo non valido." };
+  const supabase = await creaClientServer();
+  const [{ data: p, error }, fasiSalvate, scelte] = await Promise.all([
+    supabase
+      .from("preventivi")
+      .select("numero, soggetto_id, oggetto, modello_id, ricarico_percentuale, codice_iva_id, cig, cup, note")
+      .eq("id", id)
+      .maybeSingle(),
+    leggiFasi(supabase, { preventivo: id }),
+    leggiTariffeArticoli(supabase),
+  ]);
+  if (error || !p || fasiSalvate === null || scelte === null) return { errore: "Non riesco a leggere il preventivo da duplicare. Riprova." };
+
+  let bozze = copiaFasi(bozzaFasi(fasiSalvate)); // fasi NUOVE, senza gli id del preventivo copiato
+  if (costi === "attuali") bozze = aggiornaCosti(bozze, scelte.tariffe, scelte.articoli);
+
+  let fasi: unknown[];
+  try {
+    fasi = fasiPerDatabase(bozze);
+  } catch (e) {
+    return { errore: e instanceof ErroreDati ? e.message : "Dati del preventivo non validi." };
+  }
+
+  const { data: nuovoId, error: erroreSalva } = await supabase.rpc("salva_preventivo", {
+    p_id: null,
+    p_preventivo: {
+      soggetto_id: p.soggetto_id,
+      oggetto: p.oggetto,
+      modello_id: p.modello_id,
+      data: oggiItalia(),
+      valido_fino: null, // un mese da oggi
+      ricarico_percentuale: p.ricarico_percentuale,
+      prezzo_cliente: null, // riparte dal prezzo calcolato
+      codice_iva_id: p.codice_iva_id,
+      cig: p.cig,
+      cup: p.cup,
+      note: p.note,
+    },
+    p_fasi: fasi,
+  });
+  if (erroreSalva) return { errore: spiegaErrore(erroreSalva) };
+
+  revalidatePath("/preventivi");
+  redirect(
+    indirizzo({
+      id: String(nuovoId),
+      ok: `Copia del preventivo ${p.numero} creata${costi === "attuali" ? " con i costi di oggi" : " con gli stessi costi"}.`,
+    })
+  );
 }

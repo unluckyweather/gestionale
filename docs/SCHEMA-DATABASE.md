@@ -324,7 +324,8 @@ Modificabili solo dal titolare (in Impostazioni); lette da ufficio e contabilit�
 
 ### `modelli_lavorazione` — nuova
 `nome` (unico tra gli attivi), `descrizione`, `ricarico_percentuale` (predefinito 35), `note`. Le fasi stanno in `fasi_preventivo` con `modello_id`. Esempi: "Insegna luminosa", "Adesivo prespaziato", "Banner PVC con occhielli", "Wrapping furgone", "Bandiera a goccia".
-> Creando un preventivo da un modello, l'app manda i costi vuoti: si usano tariffe e costi **attuali**.
+> Creando un preventivo da un modello («Parti da un modello»), le fasi arrivano con tariffe e costi **attuali** (catalogo e tariffe di oggi; i materiali scritti a mano tengono il costo del modello) e il ricarico del modello; `preventivi.modello_id` ricorda da quale modello si è partiti. Anche la pagina e l'elenco dei modelli mostrano i costi di oggi.
+> **«Salva come modello»** crea un modello con le fasi del preventivo. **«Duplica»** crea una nuova bozza (numero nuovo, data di oggi, stesse fasi e righe, senza prezzo corretto a mano): si sceglie se tenere i costi del preventivo copiato o aggiornarli a oggi. Decisioni del 22/11.
 
 ### Viste dei totali (calcolati, mai scritti a mano; `security_invoker`)
 - **`fasi_riepilogo`**: per ogni fase attiva `ore`, `costo_ore`, `costo_materiali`, `costo`.

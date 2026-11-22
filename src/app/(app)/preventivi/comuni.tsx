@@ -54,3 +54,8 @@ export function percento(valore: number | string | null | undefined): string {
   if (valore === null || valore === undefined) return "—";
   return `${formatoPercento.format(Number(valore))}%`;
 }
+
+/** Oggi in Italia, come "2026-11-22" (il server potrebbe stare in un altro fuso orario). */
+export function oggiItalia(): string {
+  return new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Rome" }).format(new Date());
+}
