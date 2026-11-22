@@ -419,17 +419,12 @@ export default function ModuloSoggetto(props: Props) {
         {/* ---------------- Pagamento e scadenze ---------------- */}
         <Riquadro titolo="Pagamento e scadenze">
           <div className="grid gap-3 sm:grid-cols-3">
-            <Campo testo={<>Condizione di pagamento <Xml /></>} classe="sm:col-span-2">
+            <Campo testo={<>Condizione di pagamento <Xml /></>} classe="sm:col-span-3">
               <select name="condizione_pagamento_id" defaultValue={v("condizione_pagamento_id")} className={campo}>
                 <option value="">— non indicata —</option>
                 {voci(tabelle.condizioni, soggetto?.condizione_pagamento_id).map((c) => (
                   <option key={c.id} value={c.id}>{c.descrizione}{c.attivo ? "" : " (archiviata)"}</option>
                 ))}
-              </select>
-            </Campo>
-            <Campo testo="Listino (clienti)">
-              <select disabled className={campo}>
-                <option>Nessun listino</option>
               </select>
             </Campo>
             <Campo testo="Mese escluso 1">
@@ -444,8 +439,7 @@ export default function ModuloSoggetto(props: Props) {
           </div>
           <Nota>
             Esempio: con giorno fisso 10 e mesi esclusi agosto e dicembre, le scadenze cadono il giorno 10; una scadenza
-            che cade ad agosto o dicembre slitta all&apos;ultimo giorno dello stesso mese. Il listino non si usa: si lavora
-            su misura con i preventivi a fasi.
+            che cade ad agosto o dicembre slitta all&apos;ultimo giorno dello stesso mese.
           </Nota>
         </Riquadro>
 

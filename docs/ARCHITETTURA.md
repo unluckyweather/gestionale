@@ -93,6 +93,7 @@ Ogni chat di sezione inizia con: *"Leggi ARCHITETTURA.md e SCHEMA-DATABASE.md, p
 - [x] Anagrafiche: `0002_anagrafiche.sql` e pagina **riscritte** secondo SCHEMA-DATABASE v0.5 (sezione 2): schede Clienti, Fornitori, Articoli, "Codici IVA, pagamenti e banche"; scheda cliente/fornitore completa come nel mockup, storico modifiche per il titolare
 - [x] Anagrafiche: `0002_anagrafiche.sql` applicata su `gestionale-dev` (19/11)
 - [x] Anagrafiche: pagina provata su `gestionale-dev` con dati inventati (19/11)
+- [x] Anagrafiche: viste e approvate da titolare e ufficio (22/11). Eventuali correzioni dopo le prove con dati veri
 - [ ] Preventivi
 - [ ] Produzione
 - [ ] Timbrature
@@ -107,4 +108,5 @@ Ogni chat di sezione inizia con: *"Leggi ARCHITETTURA.md e SCHEMA-DATABASE.md, p
 - Verificare con il commercialista: reverse charge (TD16–TD19), dichiarazioni d'intento, elenco codici IVA/nature, condizioni di pagamento a rate
 - Scheda cliente: numero di preventivi e commesse collegati (quando esisteranno quelle tabelle)
 - Se gli operai devono vedere nome cliente o indirizzo di posa: vista apposita (oggi non leggono `soggetti`)
-- Eventuale import iniziale di clienti/fornitori/articoli dal vecchio gestionale (CSV/Excel) prima di passare a `gestionale-prod`
+- **Import da FileMaker** (decisione 22/11: si fa alla fine, prima di passare a `gestionale-prod`): pulsante/script che legge i file XML esportati da FileMaker (fornitori, clienti, riferimenti, altre sedi, condizioni di pagamento). Servirà un campo nascosto con il vecchio codice FileMaker (es. 914) per collegare contatti e sedi alla scheda giusta: va aggiunto con una nuova migrazione in quel momento. Scarti (P.IVA non valide, doppioni) in un elenco da sistemare a mano
+- **Test fattura elettronica XML** (decisione 22/11): dopo i Preventivi, generare un XML di prova (cliente italiano, estero, PA con split payment, esportatore abituale, fornitore in reverse charge) e verificarlo con un validatore e con il commercialista, per capire se i dati dell'anagrafica bastano. Serviranno anche modalità di pagamento (MP05, MP12…) e rate nelle condizioni di pagamento

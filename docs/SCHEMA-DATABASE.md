@@ -84,7 +84,7 @@ Tutte le tabelle hanno `attivo` (predefinito true), i campi `creato_*`/`aggiorna
 
 **Decisioni del 19/11:**
 - **Anche soggetti esteri e pubblica amministrazione** (supera la decisione del 17/11 "solo soggetti italiani"). I controlli di formato italiani (P.IVA 11 cifre, CF, CAP 5 cifre, provincia) si applicano **solo se il paese è IT**.
-- L'azienda lavora su misura: **niente listino di vendita**. `articoli` è il catalogo dei **materiali acquistati con il loro costo** (usato nei preventivi a fasi, sezione 3). `listini` e `prezzi_listino` non si creano; nel mockup il campo "Listino" è disattivato.
+- L'azienda lavora su misura: **niente listino di vendita**. `articoli` è il catalogo dei **materiali acquistati con il loro costo** (usato nei preventivi a fasi, sezione 3). `listini` e `prezzi_listino` non si creano e nella scheda non c'è nessun campo "Listino" (tolto il 22/11).
 - I campi segnati **XML** finiscono nella fattura elettronica. Le parti segnate "da confermare" (reverse charge, dichiarazioni d'intento) vanno verificate con il commercialista prima della fatturazione, ma le tabelle si creano subito.
 
 Enum nuovi: `tipo_soggetto` (`cliente`, `fornitore`, `entrambi`), `forma_soggetto` (`azienda`, `persona_fisica`, `pubblica_amministrazione`), `tipo_sede` (`operativa`, `altra`), `tipo_articolo` (`articolo`, `lavorazione`, `servizio`).
