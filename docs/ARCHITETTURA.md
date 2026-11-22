@@ -108,7 +108,7 @@ Ogni chat di sezione inizia con: *"Leggi ARCHITETTURA.md e SCHEMA-DATABASE.md, p
 - [x] Preventivi: `0004_lastre.sql` applicata su `gestionale-dev` e provata nel browser (22/11): articolo a lastra nel catalogo, righe a lastre intere e a m² usati, totali uguali al database
 - [x] Preventivi passo 5 (22/11): scheda «Modelli di lavorazione» (elenco con costo e prezzo indicativi ai costi di oggi, pagina del modello, archivia/ripristina); nel preventivo «Parti da un modello» (aggiungi o sostituisci le fasi, costi di oggi), «Salva come modello» e «Duplica» (nuova bozza, si sceglie se tenere i costi o aggiornarli a oggi; il prezzo corretto a mano non si copia). Nessuna migrazione nuova. Provato su `gestionale-dev` come titolare
 - [x] Preventivi passo 6 (22/11): `0005_stampa.sql` (tabella `azienda`, note per il cliente e prezzi per fase nei preventivi) provata in locale e applicata su `gestionale-dev`; Impostazioni → «Dati dell'azienda» con logo; pagina di stampa A4 `/stampa/preventivi/<id>` («Stampa → Salva come PDF»), prezzo diviso tra le fasi con somma esatta. Provata su `gestionale-dev` con dati azienda **di prova** (da sostituire con quelli veri)
-- [ ] Preventivi: passo 7 (PDF vero e invio email)
+- [ ] Preventivi: passo 7 (PDF vero e invio email) — **rimandato (22/11)**: si fa dopo l'approvazione del progetto da parte del datore di lavoro. Piano proposto in «Da fare più avanti (Preventivi)». Nel frattempo il PDF si ottiene con «Stampa → Salva come PDF» e si allega a mano
 - [ ] Produzione
 - [ ] Timbrature
 - [ ] Dashboard
@@ -124,3 +124,20 @@ Ogni chat di sezione inizia con: *"Leggi ARCHITETTURA.md e SCHEMA-DATABASE.md, p
 - Se gli operai devono vedere nome cliente o indirizzo di posa: vista apposita (oggi non leggono `soggetti`)
 - **Import da FileMaker** (decisione 22/11: si fa alla fine, prima di passare a `gestionale-prod`): pulsante/script che legge i file XML esportati da FileMaker (fornitori, clienti, riferimenti, altre sedi, condizioni di pagamento). Servirà un campo nascosto con il vecchio codice FileMaker (es. 914) per collegare contatti e sedi alla scheda giusta: va aggiunto con una nuova migrazione in quel momento. Scarti (P.IVA non valide, doppioni) in un elenco da sistemare a mano
 - **Test fattura elettronica XML** (decisione 22/11): dopo i Preventivi, generare un XML di prova (cliente italiano, estero, PA con split payment, esportatore abituale, fornitore in reverse charge) e verificarlo con un validatore e con il commercialista, per capire se i dati dell'anagrafica bastano. Serviranno anche modalità di pagamento (MP05, MP12…) e rate nelle condizioni di pagamento
+
+### Da fare più avanti (Preventivi)
+**Passo 7 — PDF vero e invio email (rimandato, piano proposto il 22/11, da confermare):**
+1. **File PDF generato dal server**, senza passare dalla stampa del browser. Proposta: libreria `@react-pdf/renderer`, che crea il PDF in JavaScript, funziona su Vercel ed è veloce. Impaginazione uguale alla pagina di stampa, che va però mantenuta in due posti. Alternativa: Chrome "senza finestra" sul server (Puppeteer), con un PDF identico alla pagina di stampa ma più lento e pesante su Vercel. Niente servizi esterni per il PDF: i prezzi non escono dall'app.
+2. **Invio email** dal preventivo e dall'anteprima, con «Invia via email»:
+   - destinatari proposti: i contatti del cliente con «riceve preventivi», modificabili prima dell'invio;
+   - oggetto e testo precompilati e modificabili;
+   - PDF allegato e copia nascosta (Ccn) all'ufficio, così resta traccia nella posta.
+3. **Servizio email** — da decidere con il datore di lavoro:
+   - **SMTP della casella aziendale** (proposta): le email partono dall'indirizzo vero dell'azienda (es. preventivi@…), senza nuovi fornitori. Servono server, utente e password SMTP del provider di posta già in uso.
+   - **Brevo** (server in UE, gratis fino a 300 email al giorno) oppure **Resend** (gratis fino a 3.000 al mese): servono un account e la verifica del dominio (record DNS). Sono "responsabili del trattamento" GDPR: indirizzi dei clienti e PDF passano da loro.
+   - In ogni caso la password o la chiave stanno solo nelle variabili d'ambiente di Vercel e in `.env.local`, mai nel codice né nel browser.
+4. **Registro degli invii**: migrazione nuova con la tabella `invii_preventivo` (preventivo, destinatari, quando, chi, esito, eventuale errore), visibile nella pagina del preventivo. Dopo un invio riuscito, una bozza passa a «inviato» (da confermare).
+5. **Prova**: invio a un indirizzo di prova interno prima di usarlo con i clienti.
+
+Decisioni da prendere prima di iniziare: quale casella o servizio invia; se lo stato passa da solo a «inviato»; testo standard dell'email.
+
