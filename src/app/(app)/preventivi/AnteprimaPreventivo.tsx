@@ -164,20 +164,20 @@ export default async function AnteprimaPreventivo({ supabase, id, modificabile, 
           {modificabile && !bloccato ? "Apri e modifica" : "Apri"}
         </Link>
         {modificabile && <PulsanteDuplica id={p.id} numero={p.numero} />}
-        {["Scarica PDF", "Invia via email"].map((testo) => (
-          <button
-            key={testo}
-            type="button"
-            disabled
-            title="In arrivo nei prossimi passi"
-            className={`${pulsanteSecondario} flex-[1_1_120px] justify-center disabled:cursor-not-allowed disabled:opacity-50`}
-          >
-            {testo}
-          </button>
-        ))}
+        <Link href={`/stampa/preventivi/${p.id}`} className={`${pulsanteSecondario} flex-[1_1_120px] justify-center`}>
+          Stampa / PDF
+        </Link>
+        <button
+          type="button"
+          disabled
+          title="In arrivo nel prossimo passo"
+          className={`${pulsanteSecondario} flex-[1_1_120px] justify-center disabled:cursor-not-allowed disabled:opacity-50`}
+        >
+          Invia via email
+        </button>
       </div>
       <p className="text-xs text-slate-500">
-        PDF ed email sono in arrivo. Ore, costi e margine restano interni: il cliente vedrà solo fasi e prezzo.
+        L&apos;invio via email è in arrivo. Ore, costi e margine restano interni: il cliente vede solo fasi e prezzo.
       </p>
     </section>
   );

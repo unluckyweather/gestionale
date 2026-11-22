@@ -2,7 +2,7 @@
 
 > **Documento di riferimento condiviso.** Ogni chat del progetto lo legge prima di toccare il database.
 > Chi aggiunge o modifica una tabella aggiorna questo file nello stesso momento.
-> Stato: **v0.7** (22/11/2026) – Fondamenta in `0001_fondamenta.sql` e Anagrafiche in `0002_anagrafiche.sql` (entrambe applicate su `gestionale-dev`). Preventivi in `0003_preventivi.sql` (applicata su `gestionale-dev`). Materiali a lastra in `0004_lastre.sql` (applicata su `gestionale-dev`). Le altre sezioni sono bozza.
+> Stato: **v0.8** (22/11/2026) – Fondamenta in `0001_fondamenta.sql` e Anagrafiche in `0002_anagrafiche.sql` (entrambe applicate su `gestionale-dev`). Preventivi in `0003_preventivi.sql` (applicata su `gestionale-dev`). Materiali a lastra in `0004_lastre.sql`, stampa in `0005_stampa.sql` (entrambe applicate su `gestionale-dev`). Le altre sezioni sono bozza.
 > Mockup confermato (19/11): https://claude.ai/artifact/B5LEbqMxrBA2FJXqQu8U4s — preventivi a fasi + scheda cliente/fornitore "proposta v3".
 
 ## Regole comuni a tutte le tabelle
@@ -74,6 +74,13 @@ Enum `azione_registro`: `creazione`, `modifica`, `archiviazione`.
 | profili | lettura di tutti, modifica | lettura di tutti | lettura di tutti | solo il proprio, lettura |
 | dipendenti | tutto (no cancellazione) | lettura | lettura | solo sé stesso, lettura |
 | registro_modifiche | lettura | — | — | — |
+
+---
+
+### `azienda` — i nostri dati (0005)
+Una sola riga (vincolo `azienda_una_sola`). `ragione_sociale` (obbligatoria), `indirizzo`, `civico`, `cap`, `comune`, `provincia`, `nazione` (predefinita `IT`), `partita_iva`, `codice_fiscale`, `telefono`, `email`, `pec`, `sito_web`, `iban`, `banca`, `rea`, `capitale_sociale`, `piede_documenti`, `logo` (immagine PNG/JPG/WebP/SVG come data URL, al massimo ~300 KB).
+Intestazione dei preventivi stampati; servirà anche alla fattura elettronica (cedente/prestatore).
+Permessi: leggono titolare, ufficio, contabilità; modifica solo il titolare (Impostazioni). Non si cancella. Trigger `a_normalizza`, `b_aggiornamento`, `vieta_cancellazione`, `z_registro`.
 
 ---
 
@@ -276,7 +283,9 @@ Modificabili solo dal titolare (in Impostazioni); lette da ufficio e contabilit�
 | prezzo_cliente | numeric(12,2) | **vuoto = prezzo calcolato**; compilato = prezzo corretto a mano |
 | codice_iva_id | uuid → codici_iva | se vuoto: quello abituale del cliente, altrimenti 22 |
 | cig, cup | text | solo per la PA |
-| note | text | interne |
+| note | text | interne, mai nel PDF |
+| note_cliente | text | (0005) stampate nel PDF per il cliente |
+| prezzi_fasi_nel_pdf | bool | (0005) predefinito false: il PDF mostra solo i totali; se vero anche il prezzo di ogni fase (prezzo del preventivo diviso in proporzione al costo delle fasi, somma esatta al centesimo) |
 
 > Trigger: `a_normalizza` (pulizia, cliente non fornitore, validità e IVA proposte), `a_numera` (numero), `a_proteggi` (numero fisso; blocco se accettato/rifiutato).
 

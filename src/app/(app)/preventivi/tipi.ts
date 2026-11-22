@@ -42,6 +42,8 @@ export type PreventivoSalvato = {
   cig: string | null;
   cup: string | null;
   note: string | null;
+  note_cliente: string | null; // (0005) testo stampato nel PDF
+  prezzi_fasi_nel_pdf: boolean; // (0005) prezzo di ogni fase nel PDF
   attivo: boolean;
   aggiornato_il: string;
 };
@@ -148,6 +150,8 @@ export type BozzaTestata = {
   cig: string;
   cup: string;
   note: string;
+  note_cliente: string;
+  prezzi_fasi_nel_pdf: boolean;
 };
 
 /** Quello che il modulo manda al salvataggio (in un campo nascosto, come JSON). */

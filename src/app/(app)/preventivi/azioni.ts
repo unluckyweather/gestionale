@@ -48,6 +48,8 @@ export async function salvaPreventivo(_prima: EsitoSalvataggio, dati: FormData):
       cig: oNull(t.cig),
       cup: oNull(t.cup),
       note: oNull(t.note),
+      note_cliente: oNull(t.note_cliente),
+      prezzi_fasi_nel_pdf: Boolean(t.prezzi_fasi_nel_pdf),
     };
 
     fasi = fasiPerDatabase(modulo.fasi);
@@ -220,7 +222,7 @@ export async function duplicaPreventivo(id: string, costi: "originali" | "attual
   const [{ data: p, error }, fasiSalvate, scelte] = await Promise.all([
     supabase
       .from("preventivi")
-      .select("numero, soggetto_id, oggetto, modello_id, ricarico_percentuale, codice_iva_id, cig, cup, note")
+      .select("numero, soggetto_id, oggetto, modello_id, ricarico_percentuale, codice_iva_id, cig, cup, note, note_cliente, prezzi_fasi_nel_pdf")
       .eq("id", id)
       .maybeSingle(),
     leggiFasi(supabase, { preventivo: id }),
@@ -252,6 +254,8 @@ export async function duplicaPreventivo(id: string, costi: "originali" | "attual
       cig: p.cig,
       cup: p.cup,
       note: p.note,
+      note_cliente: p.note_cliente,
+      prezzi_fasi_nel_pdf: p.prezzi_fasi_nel_pdf,
     },
     p_fasi: fasi,
   });

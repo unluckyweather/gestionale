@@ -29,6 +29,7 @@ src/
   proxy.ts               eseguito prima di ogni pagina: rinnova il login, manda a /login chi non è collegato
   app/
     login/               pagina di accesso (pubblica)
+    stampa/              pagine da stampare, senza menu (es. preventivi/<id>: il preventivo per il cliente)
     account-non-attivo/  avviso per account non ancora attivati
     (app)/               tutte le pagine riservate (le parentesi non compaiono nell'indirizzo)
       layout.tsx         barra laterale + controllo utente attivo
@@ -54,7 +55,7 @@ docs/                    questi documenti
 - I moduli lunghi sono componenti `"use client"` con `useActionState`: se il salvataggio non va, il modulo resta compilato e mostra l'errore.
 
 ## Regole
-1. **Il database si cambia solo con file in `supabase/migrations/`**, numerati in ordine (`0001_fondamenta.sql`, `0002_anagrafiche.sql`, `0003_preventivi.sql`, `0004_lastre.sql`…), mai a mano dal pannello. Così lo stesso schema si ricrea identico su `gestionale-prod`. Per ora una migrazione si applica incollando il file intero in Supabase → **SQL Editor** → Run (una volta sola per database). Una migrazione **non ancora applicata** da nessuna parte si può ancora correggere; una già applicata no (si crea la successiva).
+1. **Il database si cambia solo con file in `supabase/migrations/`**, numerati in ordine (`0001_fondamenta.sql`, `0002_anagrafiche.sql`, `0003_preventivi.sql`, `0004_lastre.sql`, `0005_stampa.sql`…), mai a mano dal pannello. Così lo stesso schema si ricrea identico su `gestionale-prod`. Per ora una migrazione si applica incollando il file intero in Supabase → **SQL Editor** → Run (una volta sola per database). Una migrazione **non ancora applicata** da nessuna parte si può ancora correggere; una già applicata no (si crea la successiva).
 2. **`docs/SCHEMA-DATABASE.md` è la fonte di verità** sulle tabelle: chi cambia una tabella lo aggiorna.
 3. Le **tabelle condivise** (`profili`, `dipendenti`, `soggetti`, `articoli`, `codici_iva`, `preventivi`, `numeratori`, `commesse`, `registro_modifiche`) si modificano con cautela: altre sezioni le usano.
 4. Interfaccia e nomi in **italiano**.
@@ -106,7 +107,8 @@ Ogni chat di sezione inizia con: *"Leggi ARCHITETTURA.md e SCHEMA-DATABASE.md, p
 - [x] Preventivi: materiali a lastra (lastre intere o m² usati + scarto, margine di taglio): `0004_lastre.sql` scritta e provata in locale con PGlite (22/11); catalogo articoli con misure della lastra
 - [x] Preventivi: `0004_lastre.sql` applicata su `gestionale-dev` e provata nel browser (22/11): articolo a lastra nel catalogo, righe a lastre intere e a m² usati, totali uguali al database
 - [x] Preventivi passo 5 (22/11): scheda «Modelli di lavorazione» (elenco con costo e prezzo indicativi ai costi di oggi, pagina del modello, archivia/ripristina); nel preventivo «Parti da un modello» (aggiungi o sostituisci le fasi, costi di oggi), «Salva come modello» e «Duplica» (nuova bozza, si sceglie se tenere i costi o aggiornarli a oggi; il prezzo corretto a mano non si copia). Nessuna migrazione nuova. Provato su `gestionale-dev` come titolare
-- [ ] Preventivi: passi 6–7
+- [x] Preventivi passo 6 (22/11): `0005_stampa.sql` (tabella `azienda`, note per il cliente e prezzi per fase nei preventivi) provata in locale e applicata su `gestionale-dev`; Impostazioni → «Dati dell'azienda» con logo; pagina di stampa A4 `/stampa/preventivi/<id>` («Stampa → Salva come PDF»), prezzo diviso tra le fasi con somma esatta. Provata su `gestionale-dev` con dati azienda **di prova** (da sostituire con quelli veri)
+- [ ] Preventivi: passo 7 (PDF vero e invio email)
 - [ ] Produzione
 - [ ] Timbrature
 - [ ] Dashboard

@@ -190,3 +190,28 @@ export function calcolaMateriale(r: BozzaMateriale): CalcoloMateriale {
       ` a ${perCampo(costoM2 / 10000, 2, 4)} €/m² · a lastre intere sarebbero ${lastre} ${lastre === 1 ? "lastra" : "lastre"}`,
   };
 }
+
+// ---------------------------------------------------------------------
+// Prezzo di ogni fase per il PDF del cliente
+// ---------------------------------------------------------------------
+/**
+ * Divide il prezzo (in centesimi) tra le fasi in proporzione al loro costo, in modo che la somma
+ * torni ESATTA al centesimo (i centesimi avanzati dagli arrotondamenti vanno alle fasi con il resto
+ * più grande). Vale anche quando il prezzo è stato corretto a mano.
+ * Se tutte le fasi costano 0, il prezzo si divide in parti uguali.
+ */
+export function ripartisciPrezzo(prezzo: number, costi: number[]): number[] {
+  if (costi.length === 0) return [];
+  const totale = costi.reduce((a, b) => a + b, 0);
+  const pesi = totale > 0 ? costi : costi.map(() => 1);
+  const somma = pesi.reduce((a, b) => a + b, 0);
+  const quote = pesi.map((peso, i) => ({ i, base: Math.floor((prezzo * peso) / somma), resto: (prezzo * peso) % somma }));
+  let avanzo = prezzo - quote.reduce((a, q) => a + q.base, 0);
+  // a parità di resto vince la fase che viene prima
+  for (const q of [...quote].sort((a, b) => b.resto - a.resto || a.i - b.i)) {
+    if (avanzo <= 0) break;
+    q.base += 1;
+    avanzo -= 1;
+  }
+  return quote.map((q) => q.base);
+}

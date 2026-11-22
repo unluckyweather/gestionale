@@ -7,7 +7,16 @@ import type { PostgrestError } from "@supabase/supabase-js";
 import { richiediRuolo } from "@/lib/utente";
 import { creaClientServer } from "@/lib/supabase/server";
 import { eRuolo } from "@/lib/ruoli";
-import { leggiNumero } from "@/lib/validazioni";
+import {
+  codiceFiscaleValido,
+  emailValida,
+  ibanValido,
+  leggiNumero,
+  partitaIvaValida,
+  pulisciCodiceFiscale,
+  pulisciIban,
+  pulisciPartitaIva,
+} from "@/lib/validazioni";
 
 // Pagine a cui si può tornare dopo un salvataggio (i dipendenti si modificano anche da Anagrafiche).
 const RITORNI = ["/impostazioni", "/anagrafiche?scheda=dipendenti"];
@@ -135,4 +144,79 @@ export async function salvaTariffa(dati: FormData) {
   revalidatePath("/impostazioni");
   revalidatePath("/preventivi");
   torna(`Tariffa «${nome}» salvata.`);
+}
+
+
+// ---------------------------------------------------------------------
+// Dati dell'azienda (intestazione dei documenti) — solo titolare
+// ---------------------------------------------------------------------
+export type StatoAzienda = { errore?: string; valori?: Record<string, string> };
+
+const CAMPI_AZIENDA = [
+  "ragione_sociale", "indirizzo", "civico", "cap", "comune", "provincia", "nazione",
+  "partita_iva", "codice_fiscale", "telefono", "email", "pec", "sito_web",
+  "iban", "banca", "rea", "capitale_sociale", "piede_documenti", "logo",
+] as const;
+
+/** Logo ammesso: immagine PNG, JPG, WebP o SVG incorporata (data URL), al massimo ~300 KB. */
+const LOGO = /^data:image\/(png|jpeg|webp|svg\+xml);base64,[A-Za-z0-9+/=]+$/;
+
+export async function salvaAzienda(_prima: StatoAzienda, dati: FormData): Promise<StatoAzienda> {
+  await richiediRuolo("titolare");
+  const valori: Record<string, string> = {};
+  for (const c of CAMPI_AZIENDA) valori[c] = testo(dati, c);
+  const sbaglio = (errore: string): StatoAzienda => ({ errore, valori });
+
+  const nazione = (valori.nazione || "IT").toUpperCase();
+  const piva = pulisciPartitaIva(valori.partita_iva);
+  const cf = pulisciCodiceFiscale(valori.codice_fiscale);
+  const iban = pulisciIban(valori.iban);
+
+  if (!valori.ragione_sociale) return sbaglio("La ragione sociale è obbligatoria.");
+  if (!/^[A-Z]{2}$/.test(nazione)) return sbaglio("Nazione: usa la sigla di 2 lettere (es. IT).");
+  if (piva && nazione === "IT" && !partitaIvaValida(piva)) return sbaglio("La partita IVA non è valida: controlla le cifre.");
+  if (cf && nazione === "IT" && !codiceFiscaleValido(cf)) return sbaglio("Il codice fiscale non è valido.");
+  if (valori.email && !emailValida(valori.email)) return sbaglio("L'email non è scritta correttamente.");
+  if (valori.pec && !emailValida(valori.pec)) return sbaglio("La PEC non è scritta correttamente.");
+  if (iban && !ibanValido(iban)) return sbaglio("L'IBAN non è valido: controlla le cifre.");
+  if (valori.logo && (!LOGO.test(valori.logo) || valori.logo.length > 400000))
+    return sbaglio("Il logo deve essere un'immagine PNG, JPG, WebP o SVG di al massimo 300 KB.");
+
+  const record = {
+    ragione_sociale: valori.ragione_sociale,
+    indirizzo: valori.indirizzo || null,
+    civico: valori.civico || null,
+    cap: valori.cap || null,
+    comune: valori.comune || null,
+    provincia: valori.provincia || null,
+    nazione,
+    partita_iva: piva || null,
+    codice_fiscale: cf || null,
+    telefono: valori.telefono || null,
+    email: valori.email || null,
+    pec: valori.pec || null,
+    sito_web: valori.sito_web || null,
+    iban: iban || null,
+    banca: valori.banca || null,
+    rea: valori.rea || null,
+    capitale_sociale: valori.capitale_sociale || null,
+    piede_documenti: valori.piede_documenti || null,
+    logo: valori.logo || null,
+  };
+
+  const supabase = await creaClientServer();
+  const id = testo(dati, "id");
+  const { data, error } = id
+    ? await supabase.from("azienda").update(record).eq("id", id).select("id")
+    : await supabase.from("azienda").insert(record).select("id");
+  if (error) {
+    if (error.code === "23505") return sbaglio("I dati dell'azienda esistono già: ricarica la pagina.");
+    if (error.code === "23514") return sbaglio("Controlla i dati: un campo non è nel formato giusto (email, IBAN, nazione o logo).");
+    return sbaglio(spiegaErrore(error));
+  }
+  if (!data?.length) return sbaglio("Salvataggio non riuscito: permessi insufficienti.");
+
+  revalidatePath("/impostazioni");
+  revalidatePath("/stampa", "layout");
+  torna("Dati dell'azienda salvati.");
 }

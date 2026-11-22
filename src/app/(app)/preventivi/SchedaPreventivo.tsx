@@ -20,7 +20,7 @@ export default async function SchedaPreventivo({ id, modificabile, ok, errore }:
       : supabase
           .from("preventivi")
           .select(
-            "id, numero, soggetto_id, oggetto, modello_id, data, valido_fino, stato, ricarico_percentuale, prezzo_cliente, codice_iva_id, cig, cup, note, attivo, aggiornato_il"
+            "id, numero, soggetto_id, oggetto, modello_id, data, valido_fino, stato, ricarico_percentuale, prezzo_cliente, codice_iva_id, cig, cup, note, note_cliente, prezzi_fasi_nel_pdf, attivo, aggiornato_il"
           )
           .eq("id", id)
           .maybeSingle(),

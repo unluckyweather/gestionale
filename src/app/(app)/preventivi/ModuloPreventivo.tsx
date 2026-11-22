@@ -56,6 +56,8 @@ function bozzaTestata(p: PreventivoSalvato | null, oggi: string): BozzaTestata {
     cig: s(p?.cig),
     cup: s(p?.cup),
     note: s(p?.note),
+    note_cliente: s(p?.note_cliente),
+    prezzi_fasi_nel_pdf: p?.prezzi_fasi_nel_pdf ?? false,
   };
 }
 
@@ -207,9 +209,16 @@ export default function ModuloPreventivo(props: Props) {
             {archiviato && <span className="rounded-full bg-slate-200 px-2.5 py-0.5 text-xs font-semibold text-slate-700">Archiviato</span>}
           </div>
         </div>
-        <button type="button" disabled title="In arrivo nei prossimi passi" className={`${pulsanteSecondario} cursor-not-allowed opacity-50`}>
-          Anteprima PDF cliente
-        </button>
+        {preventivo &&
+          (modificato ? (
+            <button type="button" disabled title="Salva prima le modifiche" className={`${pulsanteSecondario} cursor-not-allowed opacity-50`}>
+              Anteprima PDF cliente
+            </button>
+          ) : (
+            <Link href={`/stampa/preventivi/${preventivo.id}`} className={pulsanteSecondario}>
+              Anteprima PDF cliente
+            </Link>
+          ))}
         {preventivo && modificabile && (
           <>
             <button
@@ -361,9 +370,28 @@ export default function ModuloPreventivo(props: Props) {
                 )}
               </label>
             )}
-            <label className={`${etichetta} col-span-full`}>
+            <label className={`${etichetta} col-span-full sm:col-span-2`}>
+              Note per il cliente (vanno nel PDF)
+              <textarea
+                rows={3}
+                value={testata.note_cliente}
+                onChange={(e) => cambiaTestata({ note_cliente: e.target.value })}
+                placeholder="es. Consegna in 10 giorni lavorativi dall'ordine. Esclusi permessi comunali."
+                className={campo}
+              />
+            </label>
+            <label className={`${etichetta} col-span-full sm:col-span-2`}>
               Note interne (non vanno al cliente)
-              <textarea rows={2} value={testata.note} onChange={(e) => cambiaTestata({ note: e.target.value })} className={campo} />
+              <textarea rows={3} value={testata.note} onChange={(e) => cambiaTestata({ note: e.target.value })} className={campo} />
+            </label>
+            <label className="col-span-full flex items-center gap-2 text-sm text-slate-700">
+              <input
+                type="checkbox"
+                checked={testata.prezzi_fasi_nel_pdf}
+                onChange={(e) => cambiaTestata({ prezzi_fasi_nel_pdf: e.target.checked })}
+                className="h-4 w-4"
+              />
+              Mostra il prezzo di ogni fase nel PDF (altrimenti solo il totale)
             </label>
           </section>
 
