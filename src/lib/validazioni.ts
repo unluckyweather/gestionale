@@ -68,6 +68,8 @@ export function leggiNumero(testo: string): number | null {
 const formatoEuro = new Intl.NumberFormat("it-IT", {
   style: "currency",
   currency: "EUR",
+  // "always": punto delle migliaia anche sotto 10.000 (1.330,00 €, non 1330,00 €)
+  useGrouping: "always",
   minimumFractionDigits: 2,
   maximumFractionDigits: 4,
 });

@@ -2,7 +2,7 @@
 
 > **Documento di riferimento condiviso.** Ogni chat del progetto lo legge prima di toccare il database.
 > Chi aggiunge o modifica una tabella aggiorna questo file nello stesso momento.
-> Stato: **v0.5** (19/11/2026) – Fondamenta in `0001_fondamenta.sql` (applicata su `gestionale-dev`). Anagrafiche: `0002_anagrafiche.sql` riscritta secondo la sezione 2 (v0.5) e **applicata su `gestionale-dev`**. Le altre sezioni sono bozza.
+> Stato: **v0.6** (22/11/2026) – Fondamenta in `0001_fondamenta.sql` e Anagrafiche in `0002_anagrafiche.sql` (entrambe applicate su `gestionale-dev`). Preventivi in `0003_preventivi.sql` (applicata su `gestionale-dev`). Le altre sezioni sono bozza.
 > Mockup confermato (19/11): https://claude.ai/artifact/B5LEbqMxrBA2FJXqQu8U4s — preventivi a fasi + scheda cliente/fornitore "proposta v3".
 
 ## Regole comuni a tutte le tabelle
@@ -65,7 +65,7 @@ Enum `azione_registro`: `creazione`, `modifica`, `archiviazione`.
 | prima, dopo | jsonb | riga intera prima e dopo la modifica |
 
 > Si scrive **solo** tramite il trigger `registra_modifica` (gli utenti non possono inserire, modificare o cancellare).
-> Oggi tracciate: `profili`, `dipendenti` e (con la 0002) tutte le tabelle delle Anagrafiche; da tracciare `timbrature` (obbligo di tracciare le correzioni), `preventivi`, `commesse`.
+> Oggi tracciate: `profili`, `dipendenti` e (con la 0002) tutte le tabelle delle Anagrafiche; con la 0003 anche `preventivi`, fasi, righe, tariffe e modelli; da tracciare `timbrature` (obbligo di tracciare le correzioni), `commesse`.
 > Serve anche per le "Attività recenti" della Dashboard e per il pulsante "Storico modifiche" della scheda cliente/fornitore.
 
 ### Permessi Fondamenta (attivi)
@@ -218,72 +218,115 @@ Dati iniziali: Rimessa diretta (0), Bonifico 30 gg (30), Bonifico 60 gg (60).
 
 ---
 
-## 3. Preventivi — bozza v0.4 (a fasi, confermata 19/11)
+## 3. Preventivi — v0.6 (22/11), in `0003_preventivi.sql` (applicata su `gestionale-dev`)
 
-Mockup: artboard *Preventivo a fasi (dettaglio)*.
+Mockup: artboard *Preventivi* e *Preventivo a fasi (dettaglio)*.
 
-Come funziona: un preventivo è fatto di **fasi** (es. Grafica, Stampa, Taglio e montaggio, Posa in loco). Ogni fase ha righe di **ore** (ore × tariffa oraria) e righe di **materiali** (quantità × costo). Costo totale + ricarico % = prezzo calcolato; il **prezzo al cliente** si può correggere a mano. Il cliente (PDF, email) vede solo le descrizioni delle fasi e il prezzo; ore, costi e ricarico restano interni.
+Come funziona: un preventivo è fatto di **fasi** (es. Grafica, Stampa, Taglio e montaggio, Posa in loco). Ogni fase ha righe di **ore** (ore × costo orario) e righe di **materiali** (quantità × costo). Costo totale × (1 + ricarico %) = prezzo calcolato; il **prezzo al cliente** si può correggere a mano. Il cliente (PDF, email) vede solo le descrizioni delle fasi e il prezzo; ore, costi e ricarico restano interni.
 
 Dati confermati dall'utente (19/11): **più tariffe orarie** (persona/reparto/macchina); materiali in bobina calcolati in **m² = larghezza bobina × metri lineari**; **la trasferta è compresa nella tariffa di posa** (nessuna voce separata); **costi, ricarico e margine visibili a titolare, ufficio e contabilità** (non agli operai).
 
+**Decisioni del 22/11:**
+- **Numerazione come in FileMaker: `1/26`, `23/26`…** (progressivo che riparte da 1 ogni anno, poi le ultime due cifre dell'anno). L'anno è quello della data del preventivo. Il numero lo assegna il database alla creazione e non cambia più. Varrà lo stesso formato per le commesse.
+- Un preventivo **accettato o rifiutato non si modifica più** (né lui né fasi e righe): si può solo cambiarne lo stato o archiviarlo. Per rifarlo si duplica. Bozze e inviati si modificano.
+- **Margine in % sul prezzo al cliente** (348,42 € su 1.330 € = 26,2%).
+- Costo orario e costo dei materiali si **copiano** nella riga quando la si crea: se cambia una tariffa o un articolo, i preventivi già fatti non cambiano.
+- PDF: prima una pagina da stampare ("Stampa → Salva come PDF"); file PDF vero e invio email alla fine (passo 7, serve un servizio di invio email).
+
 Il PDF/email si invia ai contatti del cliente con `riceve_preventivi = true`.
+
+Enum nuovi: `tipo_tariffa` (`persona`, `macchina`, `posa`), `stato_preventivo` (`bozza`, `inviato`, `accettato`, `rifiutato`).
+
+### `numeratori` — nuova (ultimo numero usato)
+| campo | tipo | note |
+|---|---|---|
+| documento | text | `preventivo` (poi `commessa`…) |
+| anno | smallint | |
+| ultimo | int | ultimo progressivo usato |
+
+> Chiave: `documento` + `anno`. Nessun utente la legge o la scrive: la aggiorna il trigger `a_numera` (funzione `prossimo_numero`) nello stesso salvataggio, così due persone nello stesso istante ricevono numeri diversi e un salvataggio fallito non "brucia" un numero.
+> Per partire da un altro numero (es. continuare da FileMaker), una volta dal SQL Editor: `insert into numeratori (documento, anno, ultimo) values ('preventivo', 2026, 113) on conflict (documento, anno) do update set ultimo = excluded.ultimo;`
 
 ### `tariffe_orarie` — nuova
 | campo | tipo | note |
 |---|---|---|
-| nome | text | es. "Grafica", "Laboratorio", "Stampante UV", "Posa (trasferta compresa)" |
-| tipo | enum | `persona`, `macchina`, `posa` |
-| costo_orario | numeric(12,2) | € / ora |
+| nome | text | unico tra le attive. Es. "Grafica", "Laboratorio", "Stampante UV", "Posa (trasferta compresa)" |
+| tipo | tipo_tariffa | `persona`, `macchina`, `posa` |
+| costo_orario | numeric(12,2) | € / ora, ≥ 0 |
 | note | text | |
 
-Modificabili solo dal titolare (in Impostazioni); lette da ufficio e contabilità.
+Modificabili solo dal titolare (in Impostazioni); lette da ufficio e contabilità. Dati iniziali: le 4 tariffe del mockup con **costi d'esempio** (45, 38, 60, 42 €/h) da correggere.
 
 ### `preventivi`
 | campo | tipo | note |
 |---|---|---|
-| numero | text | `P-2026-113`, progressivo per anno |
-| soggetto_id | uuid → soggetti | cliente |
-| oggetto | text | es. "Insegna luminosa negozio" |
+| anno, progressivo | smallint, int | assegnati dal database; unici insieme |
+| numero | text | **calcolato**: `progressivo/aa`, es. `23/26` |
+| soggetto_id | uuid → soggetti | cliente (non un fornitore), obbligatorio |
+| oggetto | text | obbligatorio, es. "Insegna luminosa negozio" |
 | modello_id | uuid → modelli_lavorazione | facoltativo: da quale modello è partito |
-| data, valido_fino | date | |
-| stato | enum | `bozza`, `inviato`, `accettato`, `rifiutato` |
-| ricarico_percentuale | numeric(5,2) | es. 35 |
-| prezzo_cliente | numeric(12,2) | proposto da costo × (1 + ricarico), modificabile |
-| codice_iva_id | uuid → codici_iva | proposto da `soggetti.codice_iva_abituale_id`, altrimenti 22 |
+| data | date | predefinita oggi |
+| valido_fino | date | se vuota: data + 1 mese; non prima della data |
+| stato | stato_preventivo | predefinito `bozza` |
+| ricarico_percentuale | numeric(5,2) | predefinito 35 |
+| prezzo_cliente | numeric(12,2) | **vuoto = prezzo calcolato**; compilato = prezzo corretto a mano |
+| codice_iva_id | uuid → codici_iva | se vuoto: quello abituale del cliente, altrimenti 22 |
 | cig, cup | text | solo per la PA |
-| note | text | |
-| costo_totale, ore_previste, iva, totale | numeric | **calcolati** dalle fasi (vista o funzione, non salvati a mano) |
+| note | text | interne |
 
-### `fasi_preventivo` — nuova
+> Trigger: `a_normalizza` (pulizia, cliente non fornitore, validità e IVA proposte), `a_numera` (numero), `a_proteggi` (numero fisso; blocco se accettato/rifiutato).
+
+### `fasi_preventivo` — nuova (fasi di un preventivo **o** di un modello)
 | campo | tipo | note |
 |---|---|---|
-| preventivo_id | uuid → preventivi | |
+| preventivo_id | uuid → preventivi | compilato **oppure** `modello_id`, mai tutti e due |
+| modello_id | uuid → modelli_lavorazione | |
 | ordine | int | posizione |
-| titolo | text | es. "Stampa" |
+| titolo | text | obbligatorio, es. "Stampa" |
 | descrizione_cliente | text | testo che va nel PDF |
 
 ### `ore_fase` — nuova
 | campo | tipo | note |
 |---|---|---|
 | fase_id | uuid → fasi_preventivo | |
-| tariffa_id | uuid → tariffe_orarie | |
+| ordine | int | |
+| tariffa_id | uuid → tariffe_orarie | obbligatoria |
 | ore | numeric(6,2) | ore totali (es. 2 persone × 4 h = 8) |
 | persone | int | facoltativo, solo per mostrare il dettaglio |
-| costo_orario | numeric(12,2) | **copiato** dalla tariffa al momento del preventivo |
+| costo_orario | numeric(12,2) | se vuoto alla creazione: **copiato** dalla tariffa |
 
 ### `materiali_fase` — nuova
 | campo | tipo | note |
 |---|---|---|
 | fase_id | uuid → fasi_preventivo | |
+| ordine | int | |
 | articolo_id | uuid → articoli | facoltativo (materiale non a catalogo) |
-| descrizione | text | |
-| unita_misura | text | `m2`, `ml`, `pz`… |
-| larghezza_m, metri_lineari | numeric | solo per bobine: quantità = larghezza × metri lineari |
+| descrizione, unita_misura | text | se vuoti: copiati dall'articolo |
+| larghezza_m, metri_lineari | numeric | solo bobine, entrambi o nessuno: allora **quantità = larghezza × metri lineari** (in m², la calcola il database) |
 | quantita | numeric(12,3) | |
-| costo_unitario | numeric(12,4) | **copiato** dall'articolo |
+| costo_unitario | numeric(12,4) | se vuoto alla creazione: **copiato** dall'articolo |
 
-### `modelli_lavorazione` — nuova (da dettagliare)
-Stessa struttura del preventivo (modello → fasi → ore e materiali), senza cliente né date. Esempi: "Insegna luminosa", "Adesivo prespaziato", "Banner PVC con occhielli", "Wrapping furgone", "Bandiera a goccia".
+### `modelli_lavorazione` — nuova
+`nome` (unico tra gli attivi), `descrizione`, `ricarico_percentuale` (predefinito 35), `note`. Le fasi stanno in `fasi_preventivo` con `modello_id`. Esempi: "Insegna luminosa", "Adesivo prespaziato", "Banner PVC con occhielli", "Wrapping furgone", "Bandiera a goccia".
+> Creando un preventivo da un modello, l'app manda i costi vuoti: si usano tariffe e costi **attuali**.
+
+### Viste dei totali (calcolati, mai scritti a mano; `security_invoker`)
+- **`fasi_riepilogo`**: per ogni fase attiva `ore`, `costo_ore`, `costo_materiali`, `costo`.
+- **`preventivi_riepilogo`**: per ogni preventivo `ore_previste`, `costo_ore`, `costo_materiali`, `costo_totale`, `prezzo_calcolato`, `prezzo` (corretto a mano o calcolato), `margine`, `margine_percentuale` (sul prezzo), `aliquota_iva`, `iva`, `totale`.
+> Ogni riga si arrotonda al centesimo, poi si somma. Prova con l'esempio del mockup: costo 981,58 €, calcolato 1.325,13 €, con prezzo 1.330 € margine 348,42 € (26,2%), IVA 292,60 €, totale 1.622,60 €.
+
+### Salvataggio "tutto o niente"
+- **`salva_preventivo(p_id, p_preventivo, p_fasi)`** e **`salva_modello(p_id, p_modello, p_fasi)`** (JSON), che usano `salva_fasi`. `p_fasi` = elenco di fasi, ognuna con `ore` e `materiali`; l'ordine nell'elenco è l'ordine di fasi e righe. Righe con `id` aggiornate, senza `id` nuove, righe attive non più presenti archiviate (una fase tolta archivia anche le sue righe). `security invoker`. Restituiscono l'id.
+- Lo **stato** non si cambia da `salva_preventivo` (un nuovo preventivo è `bozza`): si cambia con un semplice update di `stato`.
+
+### Permessi Preventivi
+| | Titolare | Ufficio | Contabilità | Operaio |
+|---|---|---|---|---|
+| preventivi, fasi, ore, materiali, modelli | lettura, inserimento, modifica | lettura, inserimento, modifica | lettura | — |
+| tariffe_orarie | lettura, inserimento, modifica | lettura | lettura | — |
+| numeratori | — | — | — | — |
+
+Tutte le tabelle hanno `attivo`, i campi `creato_*`/`aggiornato_*`, i trigger `b_aggiornamento`, `vieta_cancellazione`, `z_registro` (anche fasi e righe: lo storico di un preventivo è completo).
 
 ---
 
@@ -292,7 +335,7 @@ Stessa struttura del preventivo (modello → fasi → ore e materiali), senza cl
 ### `commesse`
 | campo | tipo | note |
 |---|---|---|
-| numero | text | `C-2026-041`, progressivo per anno |
+| numero | text | come i preventivi: `41/26`, progressivo per anno (tabella `numeratori`, documento `commessa`) |
 | preventivo_id | uuid → preventivi | facoltativo (commessa senza preventivo) |
 | soggetto_id | uuid → soggetti | cliente |
 | sede_id | uuid → sedi_soggetto | facoltativo: dove si fa la posa / la consegna |

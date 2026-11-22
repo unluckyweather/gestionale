@@ -42,6 +42,7 @@ src/
     azioni-accesso.ts    login e logout
     supabase/            collegamento al database (browser, server, proxy)
 supabase/migrations/     file SQL che creano e modificano le tabelle (numerati)
+supabase/prove/          dati inventati da incollare SOLO su gestionale-dev (non sono migrazioni)
 docs/                    questi documenti
 ```
 
@@ -51,9 +52,9 @@ docs/                    questi documenti
 - I moduli lunghi sono componenti `"use client"` con `useActionState`: se il salvataggio non va, il modulo resta compilato e mostra l'errore.
 
 ## Regole
-1. **Il database si cambia solo con file in `supabase/migrations/`**, numerati in ordine (`0001_fondamenta.sql`, `0002_anagrafiche.sql`…), mai a mano dal pannello. Così lo stesso schema si ricrea identico su `gestionale-prod`. Per ora una migrazione si applica incollando il file intero in Supabase → **SQL Editor** → Run (una volta sola per database). Una migrazione **non ancora applicata** da nessuna parte si può ancora correggere; una già applicata no (si crea la successiva).
+1. **Il database si cambia solo con file in `supabase/migrations/`**, numerati in ordine (`0001_fondamenta.sql`, `0002_anagrafiche.sql`, `0003_preventivi.sql`…), mai a mano dal pannello. Così lo stesso schema si ricrea identico su `gestionale-prod`. Per ora una migrazione si applica incollando il file intero in Supabase → **SQL Editor** → Run (una volta sola per database). Una migrazione **non ancora applicata** da nessuna parte si può ancora correggere; una già applicata no (si crea la successiva).
 2. **`docs/SCHEMA-DATABASE.md` è la fonte di verità** sulle tabelle: chi cambia una tabella lo aggiorna.
-3. Le **tabelle condivise** (`profili`, `dipendenti`, `soggetti`, `articoli`, `codici_iva`, `commesse`, `registro_modifiche`) si modificano con cautela: altre sezioni le usano.
+3. Le **tabelle condivise** (`profili`, `dipendenti`, `soggetti`, `articoli`, `codici_iva`, `preventivi`, `numeratori`, `commesse`, `registro_modifiche`) si modificano con cautela: altre sezioni le usano.
 4. Interfaccia e nomi in **italiano**.
 5. Le chiavi stanno solo in `.env.local` (mai su GitHub, mai in chat).
 6. A fine lavoro: `git add .` → `git commit -m "..."` → `git push`.
@@ -94,7 +95,12 @@ Ogni chat di sezione inizia con: *"Leggi ARCHITETTURA.md e SCHEMA-DATABASE.md, p
 - [x] Anagrafiche: `0002_anagrafiche.sql` applicata su `gestionale-dev` (19/11)
 - [x] Anagrafiche: pagina provata su `gestionale-dev` con dati inventati (19/11)
 - [x] Anagrafiche: viste e approvate da titolare e ufficio (22/11). Eventuali correzioni dopo le prove con dati veri
-- [ ] Preventivi
+- [x] Preventivi: piano approvato (22/11). Passi: 1) migrazione `0003_preventivi.sql`, 2) tariffe orarie in Impostazioni, 3) elenco preventivi, 4) pagina del preventivo con calcoli dal vivo, 5) modelli e "Duplica", 6) PDF da stampare, 7) PDF vero e invio email (servizio esterno). "Converti in commessa" si fa nella chat Produzione
+- [x] Preventivi: `0003_preventivi.sql` scritta e provata in locale con l'esempio del mockup e i 4 ruoli (22/11)
+- [x] Preventivi: `0003_preventivi.sql` applicata su `gestionale-dev` (verificato il 22/11: tabelle e viste presenti, chiuse agli utenti non collegati)
+- [x] Preventivi passo 2: tariffe orarie in Impostazioni (solo titolare), scritto (22/11) — da provare su `gestionale-dev`
+- [x] Preventivi passo 3: elenco con ricerca (cliente, numero, oggetto), filtri per stato con i numeri, "archiviati", anteprima con fasi e totali dalla vista `preventivi_riepilogo` (22/11) — da provare su `gestionale-dev` con `supabase/prove/dati_prova_preventivi.sql`
+- [ ] Preventivi: passi 4–7
 - [ ] Produzione
 - [ ] Timbrature
 - [ ] Dashboard

@@ -7,6 +7,7 @@ import type { PostgrestError } from "@supabase/supabase-js";
 import { richiediRuolo } from "@/lib/utente";
 import { creaClientServer } from "@/lib/supabase/server";
 import { eRuolo } from "@/lib/ruoli";
+import { leggiNumero } from "@/lib/validazioni";
 
 // Pagine a cui si può tornare dopo un salvataggio (i dipendenti si modificano anche da Anagrafiche).
 const RITORNI = ["/impostazioni", "/anagrafiche?scheda=dipendenti"];
@@ -82,4 +83,56 @@ export async function salvaDipendente(dati: FormData) {
   revalidatePath("/impostazioni");
   revalidatePath("/anagrafiche");
   torna("Dipendente salvato.", false, ritorno);
+}
+
+// ---------------------------------------------------------------------
+// Tariffe orarie (solo titolare: lo impone anche il database)
+// ---------------------------------------------------------------------
+const TIPI_TARIFFA = ["persona", "macchina", "posa"];
+
+function spiegaErroreTariffa(errore: PostgrestError): string {
+  if (errore.code === "23505") return "Esiste già una tariffa attiva con questo nome.";
+  if (errore.code === "23514") return "Controlla i dati: nome obbligatorio e costo orario non negativo.";
+  if (errore.code === "P0001") return errore.message;
+  return "Salvataggio non riuscito. Riprova.";
+}
+
+export async function salvaTariffa(dati: FormData) {
+  await richiediRuolo("titolare");
+  const id = testo(dati, "id");
+  const nome = testo(dati, "nome");
+  const tipo = testo(dati, "tipo");
+  const costo = leggiNumero(testo(dati, "costo_orario"));
+
+  if (!nome) torna("Il nome della tariffa è obbligatorio.", true);
+  if (!TIPI_TARIFFA.includes(tipo)) torna("Tipo di tariffa non valido.", true);
+  if (costo === null || costo < 0) torna(`Costo orario non valido per «${nome}»: scrivi ad esempio 45 o 45,50.`, true);
+
+  const valori = {
+    nome,
+    tipo,
+    costo_orario: Math.round(costo * 100) / 100,
+    note: testo(dati, "note") || null,
+  };
+
+  const supabase = await creaClientServer();
+
+  if (!id) {
+    const { error } = await supabase.from("tariffe_orarie").insert(valori);
+    if (error) torna(spiegaErroreTariffa(error), true);
+    revalidatePath("/impostazioni");
+    torna(`Tariffa «${nome}» aggiunta.`);
+  }
+
+  const { data, error } = await supabase
+    .from("tariffe_orarie")
+    .update({ ...valori, attivo: dati.get("attivo") === "on" })
+    .eq("id", id)
+    .select("id");
+  if (error) torna(spiegaErroreTariffa(error), true);
+  if (!data?.length) torna("Tariffa non trovata o permessi insufficienti.", true);
+
+  revalidatePath("/impostazioni");
+  revalidatePath("/preventivi");
+  torna(`Tariffa «${nome}» salvata.`);
 }

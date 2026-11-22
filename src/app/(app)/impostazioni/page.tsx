@@ -1,9 +1,10 @@
-// Impostazioni (solo titolare): attivazione account, ruoli e anagrafica dipendenti.
+// Impostazioni (solo titolare): attivazione account, ruoli, anagrafica dipendenti, tariffe orarie.
 import { richiediSezione } from "@/lib/utente";
 import { creaClientServer } from "@/lib/supabase/server";
 import { ETICHETTE_RUOLO, RUOLI, type Ruolo } from "@/lib/ruoli";
 import { salvaProfilo } from "./azioni";
 import ElencoDipendenti from "@/components/ElencoDipendenti";
+import ElencoTariffe, { type Tariffa } from "./ElencoTariffe";
 
 type Profilo = { id: string; email: string; nome_visualizzato: string; ruolo: Ruolo; attivo: boolean };
 type Dipendente = {
@@ -29,7 +30,7 @@ export default async function Impostazioni({
   const { ok, errore } = await searchParams;
 
   const supabase = await creaClientServer();
-  const [risProfili, risDipendenti] = await Promise.all([
+  const [risProfili, risDipendenti, risTariffe] = await Promise.all([
     supabase
       .from("profili")
       .select("id, email, nome_visualizzato, ruolo, attivo")
@@ -40,15 +41,22 @@ export default async function Impostazioni({
       .select("id, nome, cognome, mansione_principale, profilo_id, attivo")
       .order("attivo", { ascending: false })
       .order("cognome"),
+    supabase
+      .from("tariffe_orarie")
+      .select("id, nome, tipo, costo_orario, note, attivo")
+      .order("attivo", { ascending: false })
+      .order("tipo")
+      .order("nome"),
   ]);
   const profili = (risProfili.data ?? []) as Profilo[];
   const dipendenti = (risDipendenti.data ?? []) as Dipendente[];
+  const tariffe = (risTariffe.data ?? []) as Tariffa[];
 
   return (
     <div className="flex max-w-5xl flex-col gap-8">
       <header>
         <h1 className="text-2xl font-semibold">Impostazioni</h1>
-        <p className="mt-1 text-sm text-slate-500">Account, ruoli e personale.</p>
+        <p className="mt-1 text-sm text-slate-500">Account, ruoli, personale e tariffe orarie.</p>
       </header>
 
       {ok && (
@@ -116,6 +124,9 @@ export default async function Impostazioni({
 
       {/* ---------------- Dipendenti (stesso elenco della scheda Anagrafiche) ---------------- */}
       <ElencoDipendenti dipendenti={dipendenti} account={profili} modificabile ritorno="/impostazioni" />
+
+      {/* ---------------- Tariffe orarie (usate nei preventivi) ---------------- */}
+      <ElencoTariffe tariffe={tariffe} />
     </div>
   );
 }
