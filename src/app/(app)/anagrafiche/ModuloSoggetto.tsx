@@ -208,14 +208,31 @@ export default function ModuloSoggetto(props: Props) {
             <Campo testo="Nome breve (per la ricerca)">
               <input name="nome_breve" defaultValue={v("nome_breve")} placeholder="es. FES" className={campo} />
             </Campo>
-            <Campo testo="Categoria merceologica">
-              <select name="categoria_id" defaultValue={v("categoria_id")} className={campo}>
-                <option value="">— nessuna —</option>
-                {voci(tabelle.categorie, soggetto?.categoria_id).map((c) => (
-                  <option key={c.id} value={c.id}>{c.descrizione}</option>
-                ))}
-              </select>
-            </Campo>
+            <div className="flex min-w-0 flex-col gap-1">
+              <Campo testo="Categoria merceologica">
+                <select name="categoria_id" defaultValue={v("categoria_id")} className={campo}>
+                  <option value="">— nessuna —</option>
+                  {voci(tabelle.categorie, soggetto?.categoria_id).map((c) => (
+                    <option key={c.id} value={c.id}>{c.descrizione}</option>
+                  ))}
+                </select>
+              </Campo>
+              {/* nessuna categoria attiva: spiega dove si creano. Si apre in una nuova scheda
+                  del browser, così quello che si sta scrivendo qui non va perso. */}
+              {!tabelle.categorie.some((c) => c.attivo) && (
+                <p className="text-xs text-slate-500">
+                  Nessuna categoria ancora: si creano in{" "}
+                  <Link
+                    href={indirizzo({ scheda: "tabelle" })}
+                    target="_blank"
+                    className="text-blue-700 underline hover:text-blue-800"
+                  >
+                    Codici IVA, pagamenti e banche
+                  </Link>
+                  .
+                </p>
+              )}
+            </div>
             <Campo testo="Sito web" classe="sm:col-span-2">
               <input name="sito_web" inputMode="url" defaultValue={v("sito_web")} placeholder="www.…" className={campo} />
             </Campo>
