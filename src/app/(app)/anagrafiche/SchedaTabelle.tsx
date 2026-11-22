@@ -23,16 +23,17 @@ export default async function SchedaTabelle({ modificaFiscali, modificaCategorie
         descrizione="Aliquota e, per le operazioni senza IVA, la natura per la fattura elettronica (N1…N7). Elenco da confermare con il commercialista."
         modificabile={modificaFiscali}
         chi="titolare e contabilità"
+        largo
       >
         {modificaFiscali && (
-          <form action={salvaCodiceIva} className="grid items-end gap-3 border-b border-slate-200 bg-slate-50 p-4 sm:grid-cols-[5rem_1fr_5.5rem_5.5rem_auto]">
+          <form action={salvaCodiceIva} className="grid items-end gap-3 border-b border-slate-200 bg-slate-50 p-4 sm:grid-cols-[6rem_minmax(0,1fr)_6rem_6rem_auto]">
             <CampiCodiceIva />
             <button className={pulsante}>Aggiungi</button>
           </form>
         )}
         <ul className="divide-y divide-slate-100">
           {codiciIva.map((c) => (
-            <Riga key={c.id} azione={salvaCodiceIva} id={c.id} attivo={c.attivo} modificabile={modificaFiscali} griglia="sm:grid-cols-[5rem_1fr_5.5rem_5.5rem_auto_auto]">
+            <Riga key={c.id} azione={salvaCodiceIva} id={c.id} attivo={c.attivo} modificabile={modificaFiscali} griglia="sm:grid-cols-[6rem_minmax(0,1fr)_6rem_6rem_auto_auto]">
               <CampiCodiceIva codice={c.codice} descrizione={c.descrizione} aliquota={Number(c.aliquota)} natura={c.natura} />
             </Riga>
           ))}
@@ -123,9 +124,17 @@ export default async function SchedaTabelle({ modificaFiscali, modificaCategorie
 }
 
 
-function Sezione(props: { titolo: string; descrizione: string; modificabile: boolean; chi: string; children: ReactNode }) {
+/** largo = occupa tutta la larghezza (serve ai Codici IVA, che hanno molte colonne). */
+function Sezione(props: {
+  titolo: string;
+  descrizione: string;
+  modificabile: boolean;
+  chi: string;
+  largo?: boolean;
+  children: ReactNode;
+}) {
   return (
-    <section className={`${riquadro} min-w-0`}>
+    <section className={`${riquadro} min-w-0 ${props.largo ? "xl:col-span-2" : ""}`}>
       <div className="border-b border-slate-200 p-4">
         <h2 className="font-semibold">{props.titolo}</h2>
         <p className="mt-1 text-sm text-slate-500">{props.descrizione}</p>
