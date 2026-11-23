@@ -25,7 +25,7 @@ export async function leggiTabelle(supabase: Client): Promise<Tabelle> {
       .order("attivo", { ascending: false })
       .order("nome"),
     supabase
-      .from("categorie_soggetto")
+      .from("categorie_merceologiche")
       .select("id, descrizione, attivo")
       .order("attivo", { ascending: false })
       .order("descrizione"),

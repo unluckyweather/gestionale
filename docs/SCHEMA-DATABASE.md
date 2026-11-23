@@ -2,7 +2,7 @@
 
 > **Documento di riferimento condiviso.** Ogni chat del progetto lo legge prima di toccare il database.
 > Chi aggiunge o modifica una tabella aggiorna questo file nello stesso momento.
-> Stato: **v0.8** (22/11/2026) – Fondamenta in `0001_fondamenta.sql` e Anagrafiche in `0002_anagrafiche.sql` (entrambe applicate su `gestionale-dev`). Preventivi in `0003_preventivi.sql` (applicata su `gestionale-dev`). Materiali a lastra in `0004_lastre.sql`, stampa in `0005_stampa.sql` (entrambe applicate su `gestionale-dev`). Le altre sezioni sono bozza.
+> Stato: **v0.9** (23/11/2026) – Fondamenta in `0001_fondamenta.sql` e Anagrafiche in `0002_anagrafiche.sql` (entrambe applicate su `gestionale-dev`). Preventivi in `0003_preventivi.sql` (applicata su `gestionale-dev`). Materiali a lastra in `0004_lastre.sql`, stampa in `0005_stampa.sql` (entrambe applicate su `gestionale-dev`). Categorie merceologiche dei materiali in `0006_categorie_merceologiche.sql` (applicata su `gestionale-dev`). Le altre sezioni sono bozza.
 > Mockup confermato (19/11): https://claude.ai/artifact/B5LEbqMxrBA2FJXqQu8U4s — preventivi a fasi + scheda cliente/fornitore "proposta v3".
 
 ## Regole comuni a tutte le tabelle
@@ -107,7 +107,6 @@ Enum nuovi: `tipo_soggetto` (`cliente`, `fornitore`, `entrambi`), `forma_soggett
 | cognome, nome | text | obbligatori per persona fisica · XML |
 | denominazione | text | **calcolata** dal database: ragione sociale, oppure "cognome nome". Per elenchi e ricerca (non si scrive) |
 | nome_breve | text | per la ricerca rapida (es. "FES") |
-| categoria_id | uuid → categorie_soggetto | categoria merceologica, facoltativa |
 | sito_web | text | |
 | paese_iva | text | 2 lettere, predefinito `IT` (proposto dalla nazione della sede legale) · XML |
 | partita_iva | text | se `paese_iva = IT`: 11 cifre; **unica tra i soggetti attivi** (per paese) · XML |
@@ -136,7 +135,7 @@ Enum nuovi: `tipo_soggetto` (`cliente`, `fornitore`, `entrambi`), `forma_soggett
 
 > Trigger `a_normalizza` (`normalizza_soggetto`): toglie spazi, maiuscolo per CF/SDI/provincia/paese/IBAN, toglie la sigla paese e i punti dalla P.IVA, minuscolo per PEC, campi vuoti → null. Svuota i campi che non c'entrano con la forma (es. ragione sociale per una persona fisica, campi PA per chi non è PA, campi `rc_*` senza reverse charge).
 > La P.IVA è unica tra i soggetti attivi **per paese** (`paese_iva` + `partita_iva`).
-> **Salvataggio della scheda intera:** funzione `salva_soggetto(p_id, p_soggetto, p_contatti, p_sedi, p_dichiarazioni)` (JSON). Salva soggetto, contatti, sedi e dichiarazioni "tutto o niente": righe con `id` aggiornate, senza `id` nuove, righe attive non più presenti archiviate. È `security invoker`: valgono le regole RLS di chi la chiama. Restituisce l'id del soggetto.
+> **Salvataggio della scheda intera:** funzione `salva_soggetto(p_id, p_soggetto, p_contatti, p_sedi, p_dichiarazioni, p_categorie)` (JSON; `p_categorie` aggiunto in 0006). Salva soggetto, contatti, sedi, dichiarazioni e categorie merceologiche del fornitore "tutto o niente": righe con `id` aggiornate, senza `id` nuove, righe attive non più presenti archiviate. È `security invoker`: valgono le regole RLS di chi la chiama. Restituisce l'id del soggetto.
 > Regole di coerenza (`check`): azienda/PA → `ragione_sociale` obbligatoria; persona fisica → `cognome` e `nome` obbligatori; `codice_ufficio_pa` e `split_payment` solo per la PA; campi `rc_*` solo se `reverse_charge`.
 > Cifre di controllo di P.IVA e CF italiani: le verifica l'app (`src/lib/validazioni.ts`).
 > Nel vecchio gestionale l'autofattura in reverse charge richiedeva un "cliente fittizio": qui i dati si prendono dal fornitore stesso.
@@ -189,8 +188,18 @@ Dati iniziali: 22, 10, 5, 4, N3.1 (esportazione), N3.5 (dichiarazione d'intento)
 ### `banche_aziendali` — nuova
 `nome`, `iban`, `abi`, `cab`, `note`. Le banche dell'azienda (ex "Banche Aziendali").
 
-### `categorie_soggetto` — nuova
-`descrizione` (unica tra le attive). Categorie merceologiche di clienti/fornitori.
+### `categorie_merceologiche` — (0006, prima si chiamava `categorie_soggetto`)
+`descrizione` (unica tra le attive). Tipi di materiale (es. Bobine, Lastre, Adesivi): **una per articolo** (`articoli.categoria_id`) e **una o più per fornitore** (`fornitori_categorie`). I clienti non hanno categoria (decisione 23/11: `soggetti.categoria_id` tolto in 0006; le categorie già date ai fornitori sono state copiate in `fornitori_categorie`).
+
+### `fornitori_categorie` — (0006)
+Quali categorie vende ogni fornitore (per filtrare i fornitori per materiale).
+| campo | tipo | note |
+|---|---|---|
+| soggetto_id | uuid → soggetti | solo `fornitore` o `entrambi` (trigger `a_controlla`) |
+| categoria_id | uuid → categorie_merceologiche | |
+| attivo | bool | categoria tolta → `false`; se torna si riattiva la stessa riga |
+
+Una riga per coppia (`unique (soggetto_id, categoria_id)`). Si scrive con `salva_soggetto` (parametro `p_categorie`: elenco di id). Registro modifiche attivo.
 
 ### `condizioni_pagamento`
 `descrizione` (obbligatoria, unica tra le attive, es. "Ri.Ba. 30-60 gg f.m."), `giorni` (0–365).
@@ -202,13 +211,14 @@ Dati iniziali: Rimessa diretta (0), Bonifico 30 gg (30), Bonifico 60 gg (60).
 |---|---|---|
 | codice | text | facoltativo; se c'è, unico tra gli attivi (maiuscole/minuscole uguali) |
 | descrizione | text | obbligatoria |
-| tipo | tipo_articolo | `articolo`, `lavorazione`, `servizio`; predefinito `articolo` |
+| tipo | tipo_articolo | `articolo`, `lavorazione`, `servizio`; predefinito `articolo`. **Non più usato dall'app (23/11)**: da togliere con una migrazione futura |
 | unita_misura | text | obbligatoria, predefinito `pz`; tipiche `m2`, `ml`, `pz`, `foglio`, `lastra` |
 | costo_unitario | numeric(12,4) | ≥ 0, IVA esclusa, **4 decimali** |
 | larghezza_bobina_m | numeric(6,3) | solo materiali in bobina: m² = larghezza × metri lineari |
 | lastra_larghezza_cm, lastra_altezza_cm | numeric(7,1) | solo materiali a lastra (0004), entrambe o nessuna; allora `costo_unitario` = **prezzo della lastra intera**. Un articolo è in bobina oppure a lastra |
 | codice_iva_id | uuid → codici_iva | predefinito 22 |
 | fornitore_id | uuid → soggetti | facoltativo: fornitore abituale |
+| categoria_id | uuid → categorie_merceologiche | (0006) facoltativa: tipo di materiale |
 | note | text | |
 
 > Trigger `a_normalizza` (`normalizza_articolo`): toglie spazi, codice vuoto → null, codice IVA vuoto → il codice "22" attivo.
@@ -217,7 +227,7 @@ Dati iniziali: Rimessa diretta (0), Bonifico 30 gg (30), Bonifico 60 gg (60).
 ### Permessi Anagrafiche
 | | Titolare | Ufficio | Contabilità | Operaio |
 |---|---|---|---|---|
-| soggetti, contatti, sedi, dichiarazioni d'intento, articoli, categorie | lettura, inserimento, modifica | lettura, inserimento, modifica | lettura | — |
+| soggetti, contatti, sedi, dichiarazioni d'intento, articoli, categorie merceologiche, fornitori_categorie | lettura, inserimento, modifica | lettura, inserimento, modifica | lettura | — |
 | codici_iva, condizioni_pagamento, banche_aziendali | lettura, inserimento, modifica | lettura | lettura, inserimento, modifica | — |
 
 > Proposta: le tabelle "fiscali" (codici IVA, pagamenti, banche aziendali) le modificano titolare e contabilità. Da confermare.

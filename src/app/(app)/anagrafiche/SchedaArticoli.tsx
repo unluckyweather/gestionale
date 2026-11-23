@@ -3,32 +3,42 @@ import Link from "next/link";
 import { creaClientServer } from "@/lib/supabase/server";
 import { euro } from "@/lib/validazioni";
 import ModuloArticolo from "./ModuloArticolo";
-import { indirizzo, pulisciRicerca } from "./indirizzo";
+import { indirizzo, pulisciRicerca, SENZA_CATEGORIA } from "./indirizzo";
 import { riquadro } from "./stile";
-import { ETICHETTE_TIPO_ARTICOLO, type Articolo, type CodiceIva } from "./tipi";
+import type { Articolo, Categoria, CodiceIva } from "./tipi";
 
-type Props = { q?: string; id?: string; archiviati: boolean; modificabile: boolean };
+type Props = {
+  q?: string;
+  id?: string;
+  archiviati: boolean;
+  categoria?: string; // id della categoria merceologica, oppure "nessuna"
+  categorie: Categoria[]; // tutte (anche archiviate), per la tendina della scheda
+  modificabile: boolean;
+};
 
 type RigaElenco = Pick<
   Articolo,
-  "id" | "codice" | "descrizione" | "tipo" | "unita_misura" | "costo_unitario" | "larghezza_bobina_m" | "lastra_larghezza_cm" | "lastra_altezza_cm" | "attivo"
+  "id" | "codice" | "descrizione" | "unita_misura" | "costo_unitario" | "larghezza_bobina_m" | "lastra_larghezza_cm" | "lastra_altezza_cm" | "attivo"
 > & {
   iva: { codice: string } | null;
   fornitore: { denominazione: string } | null;
+  categoria: { descrizione: string } | null;
 };
 
-export default async function SchedaArticoli({ q, id, archiviati, modificabile }: Props) {
+export default async function SchedaArticoli({ q, id, archiviati, categoria, categorie, modificabile }: Props) {
   const supabase = await creaClientServer();
   const ricerca = pulisciRicerca(q);
 
   let query = supabase
     .from("articoli")
     .select(
-      "id, codice, descrizione, tipo, unita_misura, costo_unitario, larghezza_bobina_m, lastra_larghezza_cm, lastra_altezza_cm, attivo, iva:codici_iva(codice), fornitore:soggetti(denominazione)"
+      "id, codice, descrizione, unita_misura, costo_unitario, larghezza_bobina_m, lastra_larghezza_cm, lastra_altezza_cm, attivo, iva:codici_iva(codice), fornitore:soggetti(denominazione), categoria:categorie_merceologiche(descrizione)"
     )
     .order("descrizione")
     .limit(500);
   if (!archiviati) query = query.eq("attivo", true);
+  if (categoria === SENZA_CATEGORIA) query = query.is("categoria_id", null);
+  else if (categoria) query = query.eq("categoria_id", categoria);
   if (ricerca) {
     const r = `%${ricerca}%`;
     query = query.or(`descrizione.ilike.${r},codice.ilike.${r}`);
@@ -42,7 +52,7 @@ export default async function SchedaArticoli({ q, id, archiviati, modificabile }
       ? supabase
           .from("articoli")
           .select(
-            "id, codice, descrizione, tipo, unita_misura, costo_unitario, larghezza_bobina_m, lastra_larghezza_cm, lastra_altezza_cm, codice_iva_id, fornitore_id, note, attivo, aggiornato_il"
+            "id, codice, descrizione, tipo, unita_misura, costo_unitario, larghezza_bobina_m, lastra_larghezza_cm, lastra_altezza_cm, codice_iva_id, fornitore_id, categoria_id, note, attivo, aggiornato_il"
           )
           .eq("id", id!)
           .maybeSingle()
@@ -69,7 +79,13 @@ export default async function SchedaArticoli({ q, id, archiviati, modificabile }
       <section aria-label="Elenco articoli" className={`${riquadro} min-w-0 flex-[3_1_520px] overflow-x-auto`}>
         {elenco.length === 0 ? (
           <p className="p-6 text-sm text-slate-500">
-            {ricerca ? `Nessun articolo trovato per «${ricerca}».` : "Nessun articolo inserito."}
+            {ricerca
+              ? `Nessun articolo trovato per «${ricerca}»${categoria ? " con questo filtro" : ""}.`
+              : categoria === SENZA_CATEGORIA
+                ? "Tutti gli articoli hanno una categoria."
+                : categoria
+                  ? "Nessun articolo con questa categoria."
+                : "Nessun articolo inserito."}
           </p>
         ) : (
           <table className="w-full text-sm">
@@ -77,6 +93,7 @@ export default async function SchedaArticoli({ q, id, archiviati, modificabile }
               <tr className="border-b border-slate-200 text-left text-xs font-semibold tracking-wide text-slate-500 uppercase">
                 <th className="px-4 py-3">Codice</th>
                 <th className="px-4 py-3">Descrizione</th>
+                <th className="px-4 py-3">Categoria</th>
                 <th className="px-4 py-3">Fornitore</th>
                 <th className="px-4 py-3 text-right">Costo</th>
                 <th className="px-4 py-3 text-right">IVA</th>
@@ -93,15 +110,12 @@ export default async function SchedaArticoli({ q, id, archiviati, modificabile }
                     <td className="px-4 py-3 whitespace-nowrap text-slate-500">{a.codice}</td>
                     <td className="px-4 py-3">
                       <Link
-                        href={indirizzo({ scheda: "articoli", q: ricerca, id: a.id, archiviati: archiviati ? "1" : undefined })}
+                        href={indirizzo({ scheda: "articoli", q: ricerca, categoria, id: a.id, archiviati: archiviati ? "1" : undefined })}
                         aria-current={selezionato ? "true" : undefined}
                         className="font-medium text-slate-900 hover:text-blue-700 hover:underline"
                       >
                         {a.descrizione}
                       </Link>
-                      {a.tipo !== "articolo" && (
-                        <span className="ml-2 rounded bg-slate-100 px-1.5 py-0.5 text-xs text-slate-600">{ETICHETTE_TIPO_ARTICOLO[a.tipo]}</span>
-                      )}
                       {a.larghezza_bobina_m && (
                         <span className="ml-2 text-xs text-slate-500">bobina {Number(a.larghezza_bobina_m).toLocaleString("it-IT")} m</span>
                       )}
@@ -112,6 +126,7 @@ export default async function SchedaArticoli({ q, id, archiviati, modificabile }
                       )}
                       {!a.attivo && <span className="ml-2 text-xs">(archiviato)</span>}
                     </td>
+                    <td className="px-4 py-3">{a.categoria?.descrizione}</td>
                     <td className="px-4 py-3">{a.fornitore?.denominazione}</td>
                     <td className="px-4 py-3 text-right whitespace-nowrap">
                       {euro(a.costo_unitario)} <span className="text-slate-400">/ {a.unita_misura}</span>
@@ -139,6 +154,7 @@ export default async function SchedaArticoli({ q, id, archiviati, modificabile }
             articolo={scelto}
             codiciIva={(risIva.data ?? []) as CodiceIva[]}
             fornitori={(risFornitori.data ?? []) as { id: string; denominazione: string; attivo: boolean }[]}
+            categorie={categorie}
             modificabile={modificabile}
           />
         ) : (

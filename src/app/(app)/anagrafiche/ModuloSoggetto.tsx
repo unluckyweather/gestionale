@@ -30,6 +30,7 @@ type Props = {
   contatti: Contatto[];
   sedi: Sede[];
   dichiarazioni: Dichiarazione[];
+  categorie: string[]; // id delle categorie merceologiche del fornitore
   tabelle: Tabelle;
   scheda: "clienti" | "fornitori";
   modificabile: boolean;
@@ -95,6 +96,9 @@ export default function ModuloSoggetto(props: Props) {
     props.contatti.length ? props.contatti.map(inBozza) : [contattoVuoto()]
   );
   const [dichiarazioni, setDichiarazioni] = useState<BozzaDichiarazione[]>(props.dichiarazioni.map(inBozza));
+  const [categorie, setCategorie] = useState<string[]>(props.categorie);
+  const cambiaCategoria = (id: string, scelta: boolean) =>
+    setCategorie((prima) => (scelta ? [...prima, id] : prima.filter((x) => x !== id)));
 
   const persona = forma === "persona_fisica";
   const pa = forma === "pubblica_amministrazione";
@@ -208,15 +212,44 @@ export default function ModuloSoggetto(props: Props) {
             <Campo testo="Nome breve (per la ricerca)">
               <input name="nome_breve" defaultValue={v("nome_breve")} placeholder="es. FES" className={campo} />
             </Campo>
-            <div className="flex min-w-0 flex-col gap-1">
-              <Campo testo="Categoria merceologica">
-                <select name="categoria_id" defaultValue={v("categoria_id")} className={campo}>
-                  <option value="">— nessuna —</option>
-                  {voci(tabelle.categorie, soggetto?.categoria_id).map((c) => (
-                    <option key={c.id} value={c.id}>{c.descrizione}</option>
-                  ))}
-                </select>
-              </Campo>
+            <Campo testo="Sito web" classe="sm:col-span-2">
+              <input name="sito_web" inputMode="url" defaultValue={v("sito_web")} placeholder="www.…" className={campo} />
+            </Campo>
+          </div>
+          {perFornitori && (
+            <fieldset className="flex flex-col gap-2">
+              <legend className="mb-1 text-xs font-medium text-slate-500">
+                Categorie merceologiche (cosa ci vende) — anche più di una
+              </legend>
+              <input type="hidden" name="categorie" value={JSON.stringify(categorie)} />
+              <div className="flex flex-wrap gap-2">
+                {/* le categorie attive, più quelle già scelte anche se archiviate */}
+                {tabelle.categorie
+                  .filter((c) => c.attivo || categorie.includes(c.id))
+                  .map((c) => {
+                    const scelta = categorie.includes(c.id);
+                    return (
+                      <label
+                        key={c.id}
+                        className={`inline-flex min-h-9 cursor-pointer items-center gap-2 rounded-full border px-3 py-1 text-sm has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-blue-600/30 ${
+                          scelta
+                            ? "border-blue-600 bg-blue-50 font-semibold text-blue-800"
+                            : "border-slate-300 bg-white text-slate-700 hover:bg-slate-50"
+                        }`}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={scelta}
+                          onChange={(e) => cambiaCategoria(c.id, e.target.checked)}
+                          className="sr-only"
+                        />
+                        {scelta ? "✓ " : ""}
+                        {c.descrizione}
+                        {c.attivo ? "" : " (archiviata)"}
+                      </label>
+                    );
+                  })}
+              </div>
               {/* nessuna categoria attiva: spiega dove si creano. Si apre in una nuova scheda
                   del browser, così quello che si sta scrivendo qui non va perso. */}
               {!tabelle.categorie.some((c) => c.attivo) && (
@@ -232,11 +265,8 @@ export default function ModuloSoggetto(props: Props) {
                   .
                 </p>
               )}
-            </div>
-            <Campo testo="Sito web" classe="sm:col-span-2">
-              <input name="sito_web" inputMode="url" defaultValue={v("sito_web")} placeholder="www.…" className={campo} />
-            </Campo>
-          </div>
+            </fieldset>
+          )}
         </Riquadro>
 
         {/* ---------------- Dati fiscali ---------------- */}

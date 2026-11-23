@@ -26,7 +26,6 @@ type Scheda = "clienti" | "fornitori" | "articoli" | "tabelle";
 
 const TIPI_SOGGETTO = ["cliente", "fornitore", "entrambi"];
 const FORME = ["azienda", "persona_fisica", "pubblica_amministrazione"];
-const TIPI_ARTICOLO = ["articolo", "lavorazione", "servizio"];
 const DOCUMENTI_RC = ["TD16", "TD17", "TD18", "TD19"];
 const ALIQUOTE = [22, 10, 5, 4, 0];
 
@@ -244,6 +243,15 @@ export async function salvaSoggetto(_prima: StatoModulo, dati: FormData): Promis
     dichiarazioni.push({ id: oNull(d.id), protocollo, data, anno, importo });
   }
 
+  // --- categorie merceologiche (solo fornitori): elenco di id, arriva come JSON
+  let categorie: string[] = [];
+  try {
+    const lette: unknown = JSON.parse(testo(dati, "categorie") || "[]");
+    if (Array.isArray(lette)) categorie = lette.filter((c): c is string => typeof c === "string" && c !== "");
+  } catch {
+    return sbaglio("Categorie merceologiche non valide.");
+  }
+
   // La pulizia (spazi, maiuscole, campi vuoti) la ripete anche il database.
   const soggetto = {
     tipo,
@@ -252,7 +260,6 @@ export async function salvaSoggetto(_prima: StatoModulo, dati: FormData): Promis
     cognome: persona ? testo(dati, "cognome") : null,
     nome: persona ? testo(dati, "nome") : null,
     nome_breve: oNull(testo(dati, "nome_breve")),
-    categoria_id: oNull(testo(dati, "categoria_id")),
     sito_web: oNull(testo(dati, "sito_web")),
     paese_iva: paeseIva,
     partita_iva: oNull(partitaIva),
@@ -297,6 +304,7 @@ export async function salvaSoggetto(_prima: StatoModulo, dati: FormData): Promis
     p_contatti: contatti,
     p_sedi: sedi,
     p_dichiarazioni: tipo === "fornitore" ? [] : dichiarazioni,
+    p_categorie: tipo === "cliente" ? [] : categorie,
   });
   if (error) return sbaglio(spiegaErrore(error, "Esiste già un dato uguale: controlla la scheda."));
 
@@ -315,13 +323,11 @@ export async function salvaArticolo(_prima: StatoModulo, dati: FormData): Promis
   const sbaglio = (errore: string): StatoModulo => ({ errore, valori });
 
   const id = testo(dati, "id");
-  const tipo = testo(dati, "tipo");
   const costo = leggiNumero(testo(dati, "costo_unitario") || "0");
   const larghezzaTesto = testo(dati, "larghezza_bobina_m");
   const larghezza = larghezzaTesto ? leggiNumero(larghezzaTesto) : null;
 
   if (!testo(dati, "descrizione")) return sbaglio("La descrizione è obbligatoria.");
-  if (!TIPI_ARTICOLO.includes(tipo)) return sbaglio("Tipo non valido.");
   if (!testo(dati, "unita_misura")) return sbaglio("L'unità di misura è obbligatoria (es. pz, m2, ml).");
   if (costo === null || costo < 0) return sbaglio("Il costo unitario non è un numero valido.");
   if (larghezzaTesto && (larghezza === null || larghezza <= 0 || larghezza >= 1000))
@@ -345,7 +351,6 @@ export async function salvaArticolo(_prima: StatoModulo, dati: FormData): Promis
   const record = {
     codice: oNull(testo(dati, "codice")),
     descrizione: testo(dati, "descrizione"),
-    tipo,
     unita_misura: testo(dati, "unita_misura"),
     costo_unitario: costo,
     larghezza_bobina_m: larghezza,
@@ -353,6 +358,7 @@ export async function salvaArticolo(_prima: StatoModulo, dati: FormData): Promis
     lastra_altezza_cm: lastraH,
     codice_iva_id: oNull(testo(dati, "codice_iva_id")),
     fornitore_id: oNull(testo(dati, "fornitore_id")),
+    categoria_id: oNull(testo(dati, "categoria_id")),
     note: oNull(testo(dati, "note")),
   };
   const doppione = "Esiste già un articolo attivo con questo codice.";
@@ -455,7 +461,7 @@ export async function salvaCategoria(dati: FormData) {
   await richiediRuolo("titolare", "ufficio");
   const descrizione = testo(dati, "descrizione");
   if (!descrizione) tornaTabelle("La descrizione della categoria è obbligatoria.", true);
-  await salvaRiga("categorie_soggetto", dati, { descrizione }, {
+  await salvaRiga("categorie_merceologiche", dati, { descrizione }, {
     nuovo: `Categoria ${descrizione} aggiunta.`,
     doppione: "Esiste già una categoria con questo nome.",
   });

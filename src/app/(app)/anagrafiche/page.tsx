@@ -9,7 +9,9 @@ import { creaClientServer } from "@/lib/supabase/server";
 import SchedaSoggetti from "./SchedaSoggetti";
 import SchedaArticoli from "./SchedaArticoli";
 import SchedaTabelle from "./SchedaTabelle";
-import { indirizzo } from "./indirizzo";
+import FiltroCategoria from "./FiltroCategoria";
+import { indirizzo, leggiCategoria, SENZA_CATEGORIA } from "./indirizzo";
+import type { Categoria } from "./tipi";
 import { campo, pulsante, pulsanteSecondario } from "./stile";
 
 type Chiave = "clienti" | "fornitori" | "articoli" | "tabelle";
@@ -26,6 +28,7 @@ type Parametri = {
   q?: string;
   id?: string;
   archiviati?: string;
+  categoria?: string;
   storico?: string;
   ok?: string;
   errore?: string;
@@ -42,6 +45,9 @@ export default async function Anagrafiche({ searchParams }: { searchParams: Prom
   const soggetti = scheda.chiave === "clienti" || scheda.chiave === "fornitori";
   // la scheda di un cliente/fornitore occupa tutta la pagina: niente ricerca né "archiviati"
   const schedaAperta = soggetti && Boolean(p.id);
+  // filtro per categoria merceologica: solo negli elenchi Fornitori e Articoli (id della categoria o "nessuna")
+  const conCategorie = scheda.chiave === "fornitori" || scheda.chiave === "articoli";
+  const categoria = conCategorie && !schedaAperta ? leggiCategoria(p.categoria) : undefined;
 
   // numeri accanto ai nomi delle schede (solo righe attive)
   const supabase = await creaClientServer();
@@ -50,11 +56,18 @@ export default async function Anagrafiche({ searchParams }: { searchParams: Prom
     if (tipi) q = q.in("tipo", tipi);
     return q;
   };
-  const [nClienti, nFornitori, nArticoli] = await Promise.all([
+  const [nClienti, nFornitori, nArticoli, risCategorie] = await Promise.all([
     conta("soggetti", ["cliente", "entrambi"]),
     conta("soggetti", ["fornitore", "entrambi"]),
     conta("articoli"),
+    // tutte le categorie (anche archiviate): il menu mostra le attive e quella scelta
+    conCategorie && !schedaAperta
+      ? supabase.from("categorie_merceologiche").select("id, descrizione, attivo").order("descrizione")
+      : Promise.resolve({ data: [] }),
   ]);
+  const categorie = (risCategorie.data ?? []) as Categoria[];
+  const nomeCategoria =
+    categoria === SENZA_CATEGORIA ? "Senza categoria" : categorie.find((c) => c.id === categoria)?.descrizione;
   const numeri: Partial<Record<Chiave, number | null>> = {
     clienti: nClienti.count,
     fornitori: nFornitori.count,
@@ -74,6 +87,9 @@ export default async function Anagrafiche({ searchParams }: { searchParams: Prom
           <form action="/anagrafiche" role="search" className="flex gap-2">
             <input type="hidden" name="scheda" value={scheda.chiave} />
             {archiviati && <input type="hidden" name="archiviati" value="1" />}
+            {conCategorie && (
+              <FiltroCategoria categorie={categorie.filter((c) => c.attivo || c.id === categoria)} scelta={categoria} />
+            )}
             <input
               type="search"
               name="q"
@@ -124,12 +140,17 @@ export default async function Anagrafiche({ searchParams }: { searchParams: Prom
       {(soggetti || scheda.chiave === "articoli") && !schedaAperta && (
         <div className="-mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
           {p.q && (
-            <Link href={indirizzo({ scheda: scheda.chiave, archiviati: archiviati ? "1" : undefined })} className="text-blue-700 hover:underline">
+            <Link href={indirizzo({ scheda: scheda.chiave, categoria, archiviati: archiviati ? "1" : undefined })} className="text-blue-700 hover:underline">
               × Togli la ricerca «{p.q}»
             </Link>
           )}
+          {categoria && (
+            <Link href={indirizzo({ scheda: scheda.chiave, q: p.q, archiviati: archiviati ? "1" : undefined })} className="text-blue-700 hover:underline">
+              × Togli il filtro «{nomeCategoria ?? "categoria"}»
+            </Link>
+          )}
           <Link
-            href={indirizzo({ scheda: scheda.chiave, q: p.q, archiviati: archiviati ? undefined : "1" })}
+            href={indirizzo({ scheda: scheda.chiave, q: p.q, categoria, archiviati: archiviati ? undefined : "1" })}
             className="text-slate-500 hover:text-slate-800 hover:underline"
           >
             {archiviati ? "Nascondi gli archiviati" : "Mostra anche gli archiviati"}
@@ -143,13 +164,21 @@ export default async function Anagrafiche({ searchParams }: { searchParams: Prom
           q={p.q}
           id={p.id}
           archiviati={archiviati}
+          categoria={categoria}
           storico={p.storico === "1"}
           modificabile={modificabile}
           vedeStorico={io.ruolo === "titolare"}
         />
       )}
       {scheda.chiave === "articoli" && (
-        <SchedaArticoli q={p.q} id={p.id} archiviati={archiviati} modificabile={modificabile} />
+        <SchedaArticoli
+          q={p.q}
+          id={p.id}
+          archiviati={archiviati}
+          categoria={categoria}
+          categorie={categorie}
+          modificabile={modificabile}
+        />
       )}
       {scheda.chiave === "tabelle" && (
         <SchedaTabelle modificaFiscali={modificaFiscali} modificaCategorie={modificabile} />

@@ -1,5 +1,5 @@
 // Storico modifiche di un cliente/fornitore: righe del registro_modifiche della scheda
-// e delle sue righe collegate (contatti, sedi, dichiarazioni d'intento).
+// e delle sue righe collegate (contatti, sedi, dichiarazioni d'intento, categorie merceologiche).
 // Il registro lo legge solo il titolare (regola RLS di 0001).
 import { creaClientServer } from "@/lib/supabase/server";
 import { dataOra } from "./dati";
@@ -20,6 +20,7 @@ const PARTE: Record<string, string> = {
   contatti_soggetto: "Contatto",
   sedi_soggetto: "Sede",
   dichiarazioni_intento: "Dichiarazione d'intento",
+  fornitori_categorie: "Categoria merceologica",
 };
 
 const AZIONE: Record<Voce["azione"], string> = {

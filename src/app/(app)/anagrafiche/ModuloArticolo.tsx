@@ -1,17 +1,12 @@
 "use client";
-// Scheda di un articolo del catalogo materiali (con costo d'acquisto), lavorazione o servizio.
+// Scheda di un articolo del catalogo: ciò che acquistiamo, con il suo costo.
+// (Il campo "tipo" del database non si mostra più: gli articoli nuovi restano "articolo".)
 // Non è un listino di vendita: il costo serve ai preventivi a fasi (costo + ricarico).
 import { useActionState } from "react";
 import { salvaArticolo, type StatoModulo } from "./azioni";
 import { campo, etichetta, pulsante } from "./stile";
 import { numeroPerCampo } from "@/lib/validazioni";
-import {
-  ETICHETTE_TIPO_ARTICOLO,
-  UNITA_MISURA,
-  type Articolo,
-  type CodiceIva,
-  type TipoArticolo,
-} from "./tipi";
+import { UNITA_MISURA, type Articolo, type Categoria, type CodiceIva } from "./tipi";
 
 type Fornitore = { id: string; denominazione: string; attivo: boolean };
 
@@ -19,10 +14,11 @@ type Props = {
   articolo: Articolo | null; // null = nuovo
   codiciIva: CodiceIva[];
   fornitori: Fornitore[];
+  categorie: Categoria[];
   modificabile: boolean;
 };
 
-export default function ModuloArticolo({ articolo, codiciIva, fornitori, modificabile }: Props) {
+export default function ModuloArticolo({ articolo, codiciIva, fornitori, categorie, modificabile }: Props) {
   const [stato, azione, inCorso] = useActionState<StatoModulo, FormData>(salvaArticolo, {});
 
   const v = (nome: string, salvato: string): string => (stato.valori ? (stato.valori[nome] ?? "") : salvato);
@@ -31,6 +27,7 @@ export default function ModuloArticolo({ articolo, codiciIva, fornitori, modific
   // nelle tendine: le voci attive, più quella già scelta anche se archiviata
   const ivaVisibili = codiciIva.filter((c) => c.attivo || c.id === articolo?.codice_iva_id);
   const fornitoriVisibili = fornitori.filter((f) => f.attivo || f.id === articolo?.fornitore_id);
+  const categorieVisibili = categorie.filter((c) => c.attivo || c.id === articolo?.categoria_id);
   const iva22 = codiciIva.find((c) => c.codice === "22" && c.attivo)?.id ?? "";
 
   return (
@@ -47,21 +44,22 @@ export default function ModuloArticolo({ articolo, codiciIva, fornitori, modific
       <input type="hidden" name="id" value={articolo?.id ?? ""} />
 
       <fieldset disabled={!modificabile || inCorso} className="grid grid-cols-2 gap-3">
-        <label className={etichetta}>
+        <label className={`${etichetta} col-span-2`}>
           Codice
           <input name="codice" defaultValue={v("codice", articolo?.codice ?? "")} placeholder="facoltativo" className={campo} />
-        </label>
-        <label className={etichetta}>
-          Tipo
-          <select name="tipo" defaultValue={v("tipo", articolo?.tipo ?? "articolo")} className={campo}>
-            {(Object.keys(ETICHETTE_TIPO_ARTICOLO) as TipoArticolo[]).map((t) => (
-              <option key={t} value={t}>{ETICHETTE_TIPO_ARTICOLO[t]}</option>
-            ))}
-          </select>
         </label>
         <label className={`${etichetta} col-span-2`}>
           Descrizione *
           <input name="descrizione" defaultValue={v("descrizione", articolo?.descrizione ?? "")} required className={campo} />
+        </label>
+        <label className={`${etichetta} col-span-2`}>
+          Categoria merceologica
+          <select name="categoria_id" defaultValue={v("categoria_id", articolo?.categoria_id ?? "")} className={campo}>
+            <option value="">— nessuna —</option>
+            {categorieVisibili.map((c) => (
+              <option key={c.id} value={c.id}>{c.descrizione}{c.attivo ? "" : " (archiviata)"}</option>
+            ))}
+          </select>
         </label>
         <label className={etichetta}>
           Unità di misura *

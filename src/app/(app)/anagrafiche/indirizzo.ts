@@ -11,3 +11,12 @@ export function indirizzo(parametri: Record<string, string | undefined>): string
 export function pulisciRicerca(q: string | undefined): string {
   return (q ?? "").replace(/[,()*%\\:"'.]/g, " ").replace(/\s+/g, " ").trim().slice(0, 60);
 }
+
+/** Valore di ?categoria= per "Senza categoria" (gli altri valori sono l'id di una categoria). */
+export const SENZA_CATEGORIA = "nessuna";
+
+/** Tiene ?categoria= solo se è "nessuna" o un id valido (uuid); altrimenti nessun filtro. */
+export function leggiCategoria(valore: string | undefined): string | undefined {
+  if (valore === SENZA_CATEGORIA) return valore;
+  return valore && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(valore) ? valore : undefined;
+}

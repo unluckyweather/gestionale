@@ -18,3 +18,5 @@ Stack: **Next.js** (TypeScript, Tailwind) · **Supabase** (database, login, RLS)
 ## Stato delle Anagrafiche
 Il mockup è stato confermato il 19/11/2026. La sezione **Anagrafiche** (`src/app/(app)/anagrafiche/`) e la migrazione `supabase/migrations/0002_anagrafiche.sql` sono state riscritte secondo SCHEMA-DATABASE v0.5.
 La migrazione 0002 è **applicata su `gestionale-dev`** (19/11/2026, dopo aver tolto la vecchia versione con i listini). Su `gestionale-prod` non va applicata finché non lo dico io.
+
+Categorie merceologiche (23/11/2026): sono tipi di **materiale**, una per articolo e una o più per fornitore; i clienti non ne hanno. Migrazione `0006_categorie_merceologiche.sql` **applicata su `gestionale-dev`** (23/11/2026) e provata nel browser; su `gestionale-prod` non va applicata finché non lo dico io.

@@ -13,7 +13,6 @@ export type Soggetto = {
   nome: string | null;
   denominazione: string;
   nome_breve: string | null;
-  categoria_id: string | null;
   sito_web: string | null;
   paese_iva: string;
   partita_iva: string | null;
@@ -104,6 +103,7 @@ export type BancaAziendale = {
   note: string | null;
   attivo: boolean;
 };
+/** Categoria merceologica dei materiali: una per articolo, una o più per fornitore. */
 export type Categoria = { id: string; descrizione: string; attivo: boolean };
 
 /** Le tabelle di servizio che servono alla scheda cliente/fornitore. */
@@ -118,7 +118,7 @@ export type Articolo = {
   id: string;
   codice: string | null;
   descrizione: string;
-  tipo: TipoArticolo;
+  tipo: TipoArticolo; // non più mostrato né scritto dall'app (sempre "articolo" per i nuovi)
   unita_misura: string;
   costo_unitario: number;
   larghezza_bobina_m: number | null;
@@ -126,6 +126,7 @@ export type Articolo = {
   lastra_altezza_cm: number | null;
   codice_iva_id: string | null;
   fornitore_id: string | null;
+  categoria_id: string | null; // categoria merceologica (Bobine, Lastre, Adesivi…)
   note: string | null;
   attivo: boolean;
   aggiornato_il: string;
@@ -141,12 +142,6 @@ export const ETICHETTE_FORMA: Record<FormaSoggetto, string> = {
   azienda: "Azienda",
   persona_fisica: "Persona fisica",
   pubblica_amministrazione: "Pubblica amministrazione",
-};
-
-export const ETICHETTE_TIPO_ARTICOLO: Record<TipoArticolo, string> = {
-  articolo: "Materiale",
-  lavorazione: "Lavorazione",
-  servizio: "Servizio",
 };
 
 export const UNITA_MISURA = ["pz", "m2", "ml", "foglio", "lastra", "kg", "h"];

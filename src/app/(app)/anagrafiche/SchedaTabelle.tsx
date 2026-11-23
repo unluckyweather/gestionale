@@ -1,6 +1,6 @@
 // Scheda "Codici IVA, pagamenti e banche": le tabelle di servizio usate nelle schede di clienti e fornitori.
 // Codici IVA, condizioni di pagamento e banche aziendali le modificano titolare e contabilità;
-// le categorie merceologiche titolare e ufficio (come clienti e fornitori).
+// le categorie merceologiche (dei materiali) titolare e ufficio, come articoli e fornitori.
 import type { ReactNode } from "react";
 import { creaClientServer } from "@/lib/supabase/server";
 import { salvaBancaAziendale, salvaCategoria, salvaCodiceIva, salvaCondizionePagamento } from "./azioni";
@@ -91,7 +91,7 @@ export default async function SchedaTabelle({ modificaFiscali, modificaCategorie
       {/* ---------------- Categorie ---------------- */}
       <Sezione
         titolo="Categorie merceologiche"
-        descrizione="Per raggruppare clienti e fornitori (facoltative)."
+        descrizione="Tipi di materiale (es. Bobine, Lastre, Adesivi): una per articolo, una o più per fornitore (facoltative)."
         modificabile={modificaCategorie}
         chi="titolare e ufficio"
       >
@@ -99,7 +99,7 @@ export default async function SchedaTabelle({ modificaFiscali, modificaCategorie
           <form action={salvaCategoria} className="grid items-end gap-3 border-b border-slate-200 bg-slate-50 p-4 sm:grid-cols-[1fr_auto]">
             <label className={etichetta}>
               Descrizione
-              <input name="descrizione" required placeholder="es. Arredamento negozi" className={campo} />
+              <input name="descrizione" required placeholder="es. Bobine" className={campo} />
             </label>
             <button className={pulsante}>Aggiungi</button>
           </form>
