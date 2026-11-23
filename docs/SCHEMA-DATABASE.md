@@ -2,7 +2,7 @@
 
 > **Documento di riferimento condiviso.** Ogni chat del progetto lo legge prima di toccare il database.
 > Chi aggiunge o modifica una tabella aggiorna questo file nello stesso momento.
-> Stato: **v0.9** (23/11/2026) – Fondamenta in `0001_fondamenta.sql` e Anagrafiche in `0002_anagrafiche.sql` (entrambe applicate su `gestionale-dev`). Preventivi in `0003_preventivi.sql` (applicata su `gestionale-dev`). Materiali a lastra in `0004_lastre.sql`, stampa in `0005_stampa.sql` (entrambe applicate su `gestionale-dev`). Categorie merceologiche dei materiali in `0006_categorie_merceologiche.sql` (applicata su `gestionale-dev`). Magazzino e ordini d'acquisto in `0007_magazzino_ordini.sql` (applicata su `gestionale-dev` il 23/11). Le altre sezioni sono bozza.
+> Stato: **v0.9** (23/11/2026) – Fondamenta in `0001_fondamenta.sql` e Anagrafiche in `0002_anagrafiche.sql` (entrambe applicate su `gestionale-dev`). Preventivi in `0003_preventivi.sql` (applicata su `gestionale-dev`). Materiali a lastra in `0004_lastre.sql`, stampa in `0005_stampa.sql` (entrambe applicate su `gestionale-dev`). Categorie merceologiche dei materiali in `0006_categorie_merceologiche.sql` (applicata su `gestionale-dev`). Magazzino e ordini d'acquisto in `0007_magazzino_ordini.sql` (applicata su `gestionale-dev` il 23/11); inventario anche per gli operai in `0008_inventario_operai.sql` (applicata su `gestionale-dev` il 23/11). Le altre sezioni sono bozza.
 > Mockup confermato (19/11): https://claude.ai/artifact/B5LEbqMxrBA2FJXqQu8U4s — preventivi a fasi + scheda cliente/fornitore "proposta v3".
 
 ## Regole comuni a tutte le tabelle
@@ -432,7 +432,7 @@ Richiesta del datore di lavoro dopo le prove del 23/11: dall'articolo si crea un
 - **Unità di magazzino**: articolo a lastra → **lastre intere**; in bobina → **bobine intere**; gli altri → la loro unità di misura. Funzione `unita_magazzino(articolo)`.
 - **Sotto zero si può andare**: è un avviso, non un blocco (il materiale può esserci fisicamente senza essere stato registrato).
 - Lo scarico dalle commesse si registra **quando si conferma il materiale usato davvero** (quantità proposte dal preventivo, modificabili); prima risulta "impegnato". Si fa con la sezione Produzione (colonna `movimenti_magazzino.commessa_id` da aggiungere allora).
-- **Gli operai registrano carichi e scarichi** (non rettifiche, non arrivi d'ordine, non annullamenti) e vedono le giacenze, ma **mai i costi**.
+- **Gli operai registrano carichi, scarichi e inventari** (rettifiche: permesse con la 0008, decisione del 23/11 dopo le prove: di solito è un operaio a contare il magazzino); non arrivi d'ordine né annullamenti. Vedono le giacenze, ma **mai i costi**.
 - Le righe degli ordini sono **solo articoli del catalogo**, così ogni arrivo finisce nella giacenza giusta.
 
 Enum nuovi: `stato_ordine_acquisto` (`bozza`, `inviato`, `ricevuto_parziale`, `ricevuto`, `annullato`), `tipo_movimento` (`carico`, `scarico`, `rettifica`).
@@ -490,7 +490,7 @@ Enum nuovi: `stato_ordine_acquisto` (`bozza`, `inviato`, `ricevuto_parziale`, `r
 | | Titolare | Ufficio | Contabilità | Operaio |
 |---|---|---|---|---|
 | ordini_acquisto, righe | lettura, inserimento, modifica | lettura, inserimento, modifica | lettura | — |
-| movimenti_magazzino | lettura, tutti i tipi, archiviazione | lettura, tutti i tipi, archiviazione | lettura | lettura; inserimento solo `carico`/`scarico` senza ordine |
+| movimenti_magazzino | lettura, tutti i tipi, archiviazione | lettura, tutti i tipi, archiviazione | lettura | lettura; inserimento di `carico`/`scarico`/`rettifica` senza ordine (0008) |
 | vista magazzino | sì | sì | sì | sì (senza costi) |
 
 Tutte le tabelle hanno `attivo`, i campi `creato_*`/`aggiornato_*`, i trigger `b_aggiornamento`, `vieta_cancellazione`, `z_registro`.

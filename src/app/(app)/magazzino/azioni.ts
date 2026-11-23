@@ -1,12 +1,11 @@
 "use server";
 // Salvataggi della scheda Magazzino.
-//   carico e scarico → tutti gli utenti attivi (anche gli operai)
-//   inventario (rettifica) e annullamento di un movimento → titolare e ufficio
+//   carico, scarico e inventario (rettifica) → tutti gli utenti attivi (anche gli operai, 0008)
+//   annullamento di un movimento → titolare e ufficio
 // Il database (RLS) rifiuterebbe comunque chi non ha i permessi.
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { richiediRuolo } from "@/lib/utente";
-import { RUOLI } from "@/lib/ruoli";
 import { creaClientServer } from "@/lib/supabase/server";
 import { leggiNumero } from "@/lib/validazioni";
 import { quantitaConUnita } from "@/lib/magazzino";
@@ -29,7 +28,8 @@ function torna(articoloId: string, chiave: "ok" | "errore", messaggio: string): 
 }
 
 export async function registraMovimento(_prima: StatoMovimento, dati: FormData): Promise<StatoMovimento> {
-  const io = await richiediRuolo(...RUOLI);
+  // la contabilità legge soltanto (come nel database)
+  await richiediRuolo("titolare", "ufficio", "operaio");
   const valori: Record<string, string> = {};
   dati.forEach((v, k) => {
     if (typeof v === "string" && !k.startsWith("$ACTION")) valori[k] = v;
@@ -44,8 +44,6 @@ export async function registraMovimento(_prima: StatoMovimento, dati: FormData):
 
   if (!UUID.test(articoloId)) return sbaglio("Articolo non valido.");
   if (!["carico", "scarico", "rettifica"].includes(tipo)) return sbaglio("Scegli se è un carico, uno scarico o un inventario.");
-  if (tipo === "rettifica" && io.ruolo !== "titolare" && io.ruolo !== "ufficio")
-    return sbaglio("L'inventario lo registrano titolare e ufficio.");
   if (!/^\d{4}-\d{2}-\d{2}$/.test(data)) return sbaglio("La data non è valida.");
   if (data > oggi()) return sbaglio("La data non può essere nel futuro.");
   if (numero === null || numero < 0 || numero >= 1e9 || Math.round(numero * 1000) !== numero * 1000)

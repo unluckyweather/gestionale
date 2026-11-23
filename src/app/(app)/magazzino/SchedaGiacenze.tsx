@@ -1,7 +1,7 @@
 // Magazzino → Giacenze: giacenza di ogni articolo (somma dei movimenti) e movimenti.
 // La vedono tutti gli utenti attivi; i costi qui non compaiono mai (vista "magazzino").
-//   carico e scarico → tutti (anche gli operai, dal telefono)
-//   inventario e annullamento di un movimento → titolare e ufficio
+//   carico, scarico e inventario → tutti (anche gli operai, dal telefono)
+//   annullamento di un movimento → titolare e ufficio
 // Indirizzo: /magazzino?q=…&avvisi=1&id=<articolo>
 import Link from "next/link";
 import type { UtenteCorrente } from "@/lib/utente";
@@ -225,7 +225,7 @@ export default async function SchedaGiacenze({ io, p }: { io: UtenteCorrente; p:
               {Number(scelto.giacenza) < 0 && (
                 <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-800">
                   La giacenza è sotto zero: è stato scaricato più materiale di quello registrato.
-                  {ufficio ? " Controlla i movimenti o registra un inventario." : " Avvisa l'ufficio."}
+                  {" Conta il materiale e registra un inventario."}
                 </p>
               )}
 
@@ -238,14 +238,20 @@ export default async function SchedaGiacenze({ io, p }: { io: UtenteCorrente; p:
                 </Link>
               )}
 
+              {io.ruolo === "contabilita" ? (
+                <p className="rounded-lg bg-slate-100 px-3 py-2 text-sm text-slate-600">
+                  Sola lettura per il tuo ruolo: carichi, scarichi e inventari li registrano titolare, ufficio e operai.
+                </p>
+              ) : (
               <ModuloMovimento
                 key={`${scelto.articolo_id}-${scelto.giacenza}-${p.ok ?? ""}`}
                 articoloId={scelto.articolo_id}
                 unita={scelto.unita}
                 giacenza={Number(scelto.giacenza)}
                 oggi={oggi}
-                inventario={ufficio}
+                inventario
               />
+              )}
 
               <div>
                 <h3 className="mb-2 text-sm font-semibold text-slate-700">Ultimi movimenti</h3>

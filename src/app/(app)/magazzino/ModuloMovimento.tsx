@@ -1,6 +1,6 @@
 "use client";
 // Registra un movimento per l'articolo scelto: carico (+), scarico (−)
-// oppure inventario (si scrive la quantità contata; solo titolare e ufficio).
+// oppure inventario (si scrive la quantità contata). Li registrano tutti, anche gli operai.
 import { useActionState, useState } from "react";
 import { registraMovimento, type StatoMovimento } from "./azioni";
 import { campo, etichetta, pulsante } from "../anagrafiche/stile";
