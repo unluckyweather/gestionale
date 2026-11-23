@@ -149,3 +149,43 @@ export async function archiviaOrdine(dati: FormData) {
   revalidatePath("/anagrafiche");
   torna(id, attivo ? "Ordine ripristinato." : "Ordine archiviato.");
 }
+
+// ---------------------------------------------------------------------
+// Registra arrivo: per ogni riga la quantità arrivata (righe a 0 ignorate).
+// Il database crea i movimenti di carico e aggiorna lo stato dell'ordine.
+// ---------------------------------------------------------------------
+export async function registraArrivo(_prima: EsitoOrdine, dati: FormData): Promise<EsitoOrdine> {
+  await richiediRuolo("titolare", "ufficio");
+  const id = idONull(dati.get("id"));
+  if (!id) return { errore: "Ordine non valido. Ricarica la pagina." };
+
+  const data = testo(dati.get("data"));
+  const oggi = new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Rome" }).format(new Date());
+  if (!DATA.test(data)) return { errore: "Scrivi la data di arrivo." };
+  if (data > oggi) return { errore: "La data di arrivo non può essere nel futuro." };
+
+  let righe: { riga_id: string; quantita: number }[];
+  try {
+    righe = dati
+      .getAll("riga_id")
+      .map((rigaId, i) => ({ riga_id: testo(rigaId), quantita: numero(testo(dati.getAll("quantita")[i]), `Riga ${i + 1}, quantità arrivata`, 3) ?? 0 }))
+      .filter((r) => UUID.test(r.riga_id) && r.quantita > 0);
+  } catch (e) {
+    if (e instanceof ErroreDati) return { errore: e.message };
+    return { errore: "Dati non validi. Ricarica la pagina." };
+  }
+  if (!righe.length) return { errore: "Scrivi almeno una quantità arrivata." };
+
+  const supabase = await creaClientServer();
+  const { data: quante, error } = await supabase.rpc("registra_arrivo", {
+    p_ordine_id: id,
+    p_righe: righe,
+    p_data: data,
+    p_note: oNull(dati.get("note")),
+  });
+  if (error) return { errore: spiegaErrore(error) };
+
+  revalidatePath("/magazzino");
+  revalidatePath("/anagrafiche");
+  torna(id, `Arrivo registrato: ${quante} ${quante === 1 ? "riga caricata" : "righe caricate"} in magazzino.`);
+}

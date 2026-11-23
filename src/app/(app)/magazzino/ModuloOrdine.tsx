@@ -18,8 +18,8 @@ import {
 } from "@/lib/magazzino";
 import { campo, etichetta, pulsante, pulsanteSecondario, riquadro } from "../anagrafiche/stile";
 import { useConferma } from "../preventivi/Conferma";
-import { archiviaOrdine, cambiaStatoOrdine, salvaOrdine, type DatiOrdine, type EsitoOrdine } from "./azioniOrdini";
-import { EtichettaStatoOrdine, indirizzo } from "./comuni";
+import { archiviaOrdine, cambiaStatoOrdine, registraArrivo, salvaOrdine, type DatiOrdine, type EsitoOrdine } from "./azioniOrdini";
+import { EtichettaStatoOrdine, dataItaliana, indirizzo } from "./comuni";
 
 export type OrdineSalvato = {
   id: string;
@@ -45,6 +45,16 @@ export type RigaSalvata = {
   arrivato: number;
 };
 
+export type Arrivo = {
+  id: string;
+  data: string;
+  quantita: number;
+  note: string | null;
+  attivo: boolean; // false = arrivo annullato (dal Magazzino)
+  riga_ordine_id: string;
+  autore: { nome_visualizzato: string } | null;
+};
+
 export type Fornitore = { id: string; denominazione: string; nome_breve: string | null; attivo: boolean };
 
 export type ArticoloScelta = {
@@ -66,6 +76,7 @@ export type ArticoloScelta = {
 type Props = {
   ordine: OrdineSalvato | null; // null = nuovo
   righe: RigaSalvata[];
+  arrivi: Arrivo[];
   fornitori: Fornitore[];
   articoli: ArticoloScelta[];
   daArticolo?: ArticoloScelta; // «Ordina» dalla scheda di un articolo
@@ -413,7 +424,150 @@ export default function ModuloOrdine(props: Props) {
           </div>
         )}
       </form>
+
+      {ordine && modificabile && !archiviato && ["bozza", "inviato", "ricevuto_parziale"].includes(stato) && props.righe.length > 0 && (
+        <PannelloArrivo
+          ordineId={ordine.id}
+          righe={props.righe}
+          perId={perId}
+          oggi={oggi}
+          fermo={modificato}
+          aperto={stato !== "bozza"}
+        />
+      )}
+      {ordine && props.arrivi.length > 0 && <ElencoArrivi arrivi={props.arrivi} righe={props.righe} />}
     </div>
+  );
+}
+
+// ---------------------------------------------------------------------
+// Registra arrivo: quantità arrivata per ogni riga (proposta: quanto manca).
+// ---------------------------------------------------------------------
+type PropsArrivo = {
+  ordineId: string;
+  righe: RigaSalvata[];
+  perId: Map<string, ArticoloScelta>;
+  oggi: string;
+  fermo: boolean; // modifiche all'ordine non salvate
+  aperto: boolean;
+};
+
+function PannelloArrivo({ ordineId, righe, perId, oggi, fermo, aperto: apertoIniziale }: PropsArrivo) {
+  const [aperto, setAperto] = useState(apertoIniziale);
+  const [esito, azione, inCorso] = useActionState<EsitoOrdine, FormData>(registraArrivo, {});
+  const [, avvia] = useTransition();
+
+  if (!aperto) {
+    return (
+      <button type="button" onClick={() => setAperto(true)} className={`${pulsanteSecondario} self-start`}>
+        Registra arrivo merce
+      </button>
+    );
+  }
+
+  return (
+    <section aria-labelledby="titolo-arrivo" className={`${riquadro} flex flex-col gap-4 border-green-200 p-5`}>
+      <div>
+        <h2 id="titolo-arrivo" className="text-lg font-semibold">Registra arrivo merce</h2>
+        <p className="text-sm text-slate-500">
+          Scrivi quanto è arrivato davvero (già proposto: quello che manca). Le quantità vengono caricate in magazzino e lo
+          stato dell&apos;ordine si aggiorna da solo. Lascia 0 per quello che non è arrivato.
+        </p>
+      </div>
+      {esito.errore && <p role="alert" className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-800">{esito.errore}</p>}
+      {fermo && <p className="text-sm text-amber-800">Salva prima le modifiche all&apos;ordine.</p>}
+
+      <form
+        noValidate
+        className="flex flex-col gap-4"
+        onSubmit={(e) => {
+          e.preventDefault();
+          const dati = new FormData(e.currentTarget);
+          avvia(() => azione(dati));
+        }}
+      >
+        <input type="hidden" name="id" value={ordineId} />
+        <fieldset disabled={fermo || inCorso} className="flex flex-col gap-4">
+          <legend className="sr-only">Quantità arrivate</legend>
+          <ul className="divide-y divide-slate-100 rounded-lg border border-slate-200">
+            {righe.map((r, i) => {
+              const a = perId.get(r.articolo_id);
+              const u = a ? unitaMagazzino(a) : r.unita_misura;
+              const manca = Math.max(Number(r.quantita) - r.arrivato, 0);
+              return (
+                <li key={r.id} className="flex flex-wrap items-center gap-3 px-3 py-2">
+                  <input type="hidden" name="riga_id" value={r.id} />
+                  <span className="min-w-48 flex-1 text-sm">
+                    <span className="font-medium">{r.descrizione}</span>
+                    <span className="block text-xs text-slate-500">
+                      ordinate {quantitaConUnita(r.quantita, u)} · arrivate {formatoQuantita(r.arrivato)}
+                      {manca > 0 ? ` · mancano ${formatoQuantita(manca)}` : " · complete"}
+                    </span>
+                  </span>
+                  <label className="flex items-center gap-2 text-sm text-slate-600">
+                    <span className="sr-only">Quantità arrivata della riga {i + 1}</span>
+                    <input
+                      name="quantita"
+                      inputMode="decimal"
+                      defaultValue={manca > 0 ? formatoQuantita(manca).replace(/\./g, "") : "0"}
+                      className={`${campo} w-24 text-right`}
+                    />
+                    <span className="w-14">{unitaPlurale(u, 2)}</span>
+                  </label>
+                </li>
+              );
+            })}
+          </ul>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+            <label className={etichetta}>
+              Data di arrivo
+              <input type="date" name="data" defaultValue={oggi} max={oggi} className={campo} />
+            </label>
+            <label className={`${etichetta} sm:col-span-2`}>
+              Note
+              <input name="note" placeholder="es. DDT n. 456 del 25/11" className={campo} />
+            </label>
+          </div>
+          <div className="flex flex-wrap gap-3">
+            <button className={pulsante}>{inCorso ? "Registrazione…" : "Carica in magazzino"}</button>
+            <button type="button" onClick={() => setAperto(false)} className={pulsanteSecondario}>
+              Chiudi
+            </button>
+          </div>
+        </fieldset>
+      </form>
+    </section>
+  );
+}
+
+/** Arrivi già registrati (gli annullati, fatti dal Magazzino, compaiono barrati). */
+function ElencoArrivi({ arrivi, righe }: { arrivi: Arrivo[]; righe: RigaSalvata[] }) {
+  const perRiga = new Map(righe.map((r) => [r.id, r]));
+  return (
+    <section aria-labelledby="titolo-arrivi" className={`${riquadro} p-5`}>
+      <h2 id="titolo-arrivi" className="mb-2 text-sm font-semibold text-slate-700">Arrivi registrati</h2>
+      <ul className="divide-y divide-slate-100 text-sm">
+        {arrivi.map((m) => {
+          const r = perRiga.get(m.riga_ordine_id);
+          return (
+            <li key={m.id} className={`flex flex-wrap items-baseline gap-x-3 py-2 ${m.attivo ? "" : "text-slate-400 line-through"}`}>
+              <span className="w-24 text-slate-500">{dataItaliana(m.data)}</span>
+              <span className="min-w-40 flex-1">
+                {r?.descrizione ?? "—"}
+                {m.note && <span className="text-slate-500"> · {m.note}</span>}
+              </span>
+              <span className="font-semibold text-green-700">
+                +{r ? quantitaConUnita(m.quantita, r.unita_misura) : formatoQuantita(m.quantita)}
+              </span>
+              {m.autore && <span className="text-xs text-slate-400">{m.autore.nome_visualizzato}</span>}
+            </li>
+          );
+        })}
+      </ul>
+      <p className="mt-2 text-xs text-slate-500">
+        Un arrivo sbagliato si annulla da Magazzino → Giacenze → articolo → «Annulla»: l&apos;ordine si ricalcola da solo.
+      </p>
+    </section>
   );
 }
 

@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { creaClientServer } from "@/lib/supabase/server";
 import { riquadro } from "../anagrafiche/stile";
-import ModuloOrdine, { type ArticoloScelta, type Fornitore, type OrdineSalvato, type RigaSalvata } from "./ModuloOrdine";
+import ModuloOrdine, { type Arrivo, type ArticoloScelta, type Fornitore, type OrdineSalvato, type RigaSalvata } from "./ModuloOrdine";
 import { indirizzo, oggiItalia } from "./comuni";
 
 type Props = { id: string; articolo?: string; modificabile: boolean; ok?: string; errore?: string };
@@ -63,6 +63,18 @@ export default async function SchedaOrdine({ id, articolo, modificabile, ok, err
   const arrivi = new Map((risArrivi.data ?? []).map((a) => [a.riga_id as string, Number(a.arrivato)]));
   const righe = ((risRighe.data ?? []) as Omit<RigaSalvata, "arrivato">[]).map((r) => ({ ...r, arrivato: arrivi.get(r.id) ?? 0 }));
 
+  // arrivi già registrati per questo ordine (movimenti di carico legati alle sue righe)
+  const idRighe = righe.map((r) => r.id);
+  const { data: risArriviElenco } = idRighe.length
+    ? await supabase
+        .from("movimenti_magazzino")
+        .select("id, data, quantita, note, attivo, riga_ordine_id, autore:profili!movimenti_magazzino_creato_da_fkey(nome_visualizzato)")
+        .in("riga_ordine_id", idRighe)
+        .order("data", { ascending: false })
+        .order("creato_il", { ascending: false })
+    : { data: [] };
+  const arriviElenco = (risArriviElenco ?? []) as unknown as Arrivo[];
+
   const giacenze = new Map(
     ((risGiacenze.data ?? []) as { articolo_id: string; giacenza: number; sotto_scorta: boolean }[]).map((g) => [g.articolo_id, g])
   );
@@ -83,6 +95,7 @@ export default async function SchedaOrdine({ id, articolo, modificabile, ok, err
       key={ordine ? `${ordine.id}-${ordine.aggiornato_il}` : `nuovo-${articolo ?? ""}`}
       ordine={ordine}
       righe={righe}
+      arrivi={arriviElenco}
       fornitori={fornitori}
       articoli={articoli}
       daArticolo={daArticolo}
