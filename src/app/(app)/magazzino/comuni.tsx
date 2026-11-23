@@ -10,11 +10,16 @@ export function indirizzo(parametri: Record<string, string | undefined>): string
   return testo ? `/magazzino?${testo}` : "/magazzino";
 }
 
-export function Titolo() {
+/** Titolo della scheda; il sottotitolo parla degli ordini solo a chi li vede (non agli operai). */
+export function Titolo({ ordini = true }: { ordini?: boolean }) {
   return (
     <div className="min-w-60 flex-1">
       <h1 className="text-2xl font-semibold">Magazzino</h1>
-      <p className="mt-1 text-sm text-slate-500">Quanto materiale c&apos;è e cosa abbiamo ordinato ai fornitori</p>
+      <p className="mt-1 text-sm text-slate-500">
+        {ordini
+          ? "Quanto materiale c'è e cosa abbiamo ordinato ai fornitori"
+          : "Quanto materiale c'è: registra quello che entra, quello che usi e l'inventario"}
+      </p>
     </div>
   );
 }

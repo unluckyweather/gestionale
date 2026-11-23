@@ -94,7 +94,7 @@ export default async function SchedaGiacenze({ io, p }: { io: UtenteCorrente; p:
   return (
     <div className="flex flex-col gap-5">
       <header className="flex flex-wrap items-center gap-3">
-        <Titolo />
+        <Titolo ordini={io.ruolo !== "operaio"} />
         <form action="/magazzino" role="search" className="flex gap-2">
           {avvisi && <input type="hidden" name="avvisi" value="1" />}
           <input
