@@ -20,3 +20,5 @@ Il mockup è stato confermato il 19/11/2026. La sezione **Anagrafiche** (`src/ap
 La migrazione 0002 è **applicata su `gestionale-dev`** (19/11/2026, dopo aver tolto la vecchia versione con i listini). Su `gestionale-prod` non va applicata finché non lo dico io.
 
 Categorie merceologiche (23/11/2026): sono tipi di **materiale**, una per articolo e una o più per fornitore; i clienti non ne hanno. Migrazione `0006_categorie_merceologiche.sql` **applicata su `gestionale-dev`** (23/11/2026) e provata nel browser; su `gestionale-prod` non va applicata finché non lo dico io.
+
+Magazzino e ordini d'acquisto (23/11/2026): piano approvato (vedi ARCHITETTURA.md, Stato di avanzamento). Migrazione `0007_magazzino_ordini.sql` **applicata su `gestionale-dev`** (23/11); passo 2 (giacenze negli Articoli e scheda Magazzino) fatto e provato nel browser come titolare (manca la prova con un operaio); prossimo: passo 3, ordini d'acquisto; su `gestionale-prod` non va applicata finché non lo dico io.

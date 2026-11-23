@@ -3,22 +3,26 @@
 // (Il campo "tipo" del database non si mostra più: gli articoli nuovi restano "articolo".)
 // Non è un listino di vendita: il costo serve ai preventivi a fasi (costo + ricarico).
 import { useActionState } from "react";
+import Link from "next/link";
+import GiacenzaBadge from "@/components/Giacenza";
 import { salvaArticolo, type StatoModulo } from "./azioni";
 import { campo, etichetta, pulsante } from "./stile";
 import { numeroPerCampo } from "@/lib/validazioni";
-import { UNITA_MISURA, type Articolo, type Categoria, type CodiceIva } from "./tipi";
+import { quantitaConUnita } from "@/lib/magazzino";
+import { UNITA_MISURA, type Articolo, type Categoria, type CodiceIva, type Giacenza } from "./tipi";
 
 type Fornitore = { id: string; denominazione: string; attivo: boolean };
 
 type Props = {
   articolo: Articolo | null; // null = nuovo
+  giacenza: Giacenza | null; // dalla vista "magazzino"
   codiciIva: CodiceIva[];
   fornitori: Fornitore[];
   categorie: Categoria[];
   modificabile: boolean;
 };
 
-export default function ModuloArticolo({ articolo, codiciIva, fornitori, categorie, modificabile }: Props) {
+export default function ModuloArticolo({ articolo, giacenza, codiciIva, fornitori, categorie, modificabile }: Props) {
   const [stato, azione, inCorso] = useActionState<StatoModulo, FormData>(salvaArticolo, {});
 
   const v = (nome: string, salvato: string): string => (stato.valori ? (stato.valori[nome] ?? "") : salvato);
@@ -39,6 +43,23 @@ export default function ModuloArticolo({ articolo, codiciIva, fornitori, categor
       )}
       {!modificabile && (
         <p className="rounded-lg bg-slate-100 px-3 py-2 text-sm text-slate-600">Sola lettura per il tuo ruolo.</p>
+      )}
+
+      {articolo && giacenza && (
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 rounded-lg bg-slate-50 px-3 py-2 text-sm">
+          <span>
+            In magazzino:{" "}
+            <strong>
+              <GiacenzaBadge giacenza={giacenza.giacenza} unita={giacenza.unita} sottoScorta={giacenza.sotto_scorta} />
+            </strong>
+          </span>
+          {Number(giacenza.in_arrivo) > 0 && (
+            <span className="text-slate-500">in arrivo {quantitaConUnita(giacenza.in_arrivo, giacenza.unita)}</span>
+          )}
+          <Link href={`/magazzino?id=${articolo.id}`} className="ml-auto text-blue-700 hover:underline">
+            Movimenti →
+          </Link>
+        </div>
       )}
 
       <input type="hidden" name="id" value={articolo?.id ?? ""} />
@@ -95,15 +116,18 @@ export default function ModuloArticolo({ articolo, codiciIva, fornitori, categor
           />
         </label>
         <label className={etichetta}>
-          Codice IVA
-          <select name="codice_iva_id" defaultValue={v("codice_iva_id", articolo?.codice_iva_id ?? iva22)} className={campo}>
-            {ivaVisibili.map((c) => (
-              <option key={c.id} value={c.id}>{c.codice} – {c.descrizione}</option>
-            ))}
-          </select>
+          Lunghezza bobina (m)
+          <input
+            name="bobina_lunghezza_m"
+            inputMode="decimal"
+            defaultValue={v("bobina_lunghezza_m", articolo?.bobina_lunghezza_m ? numeroPerCampo(articolo.bobina_lunghezza_m) : "")}
+            placeholder="es. 50"
+            className={campo}
+          />
         </label>
-        <p className="col-span-2 -mt-1 text-xs text-slate-500">
-          Per i materiali in bobina, nei preventivi: m² = larghezza bobina × metri lineari.
+        <p className="col-span-2 -mt-1 self-end text-xs text-slate-500">
+          Per i materiali in bobina, nei preventivi: m² = larghezza bobina × metri lineari. In magazzino e negli ordini si
+          contano le <strong>bobine intere</strong>: con la lunghezza, il costo di una bobina si calcola da solo.
         </p>
         <label className={etichetta}>
           Lastra: larghezza (cm)
@@ -130,6 +154,28 @@ export default function ModuloArticolo({ articolo, codiciIva, fornitori, categor
           l&apos;unità di misura «lastra». Nei preventivi si calcola quante lastre servono per i pezzi, oppure i soli m² usati.
           Un articolo è in bobina oppure a lastra, non tutte e due.
         </p>
+        <label className={`${etichetta} col-span-2`}>
+          Scorta minima
+          <input
+            name="scorta_minima"
+            inputMode="decimal"
+            defaultValue={v("scorta_minima", articolo?.scorta_minima != null ? String(articolo.scorta_minima).replace(".", ",") : "")}
+            placeholder="facoltativa: sotto questa quantità compare l'avviso"
+            className={campo}
+          />
+        </label>
+        <p className="col-span-2 -mt-1 text-xs text-slate-500">
+          In <strong>lastre</strong> per i materiali a lastra, in <strong>bobine</strong> per quelli in bobina, altrimenti
+          nell&apos;unità di misura dell&apos;articolo.
+        </p>
+        <label className={`${etichetta} col-span-2`}>
+          Codice IVA
+          <select name="codice_iva_id" defaultValue={v("codice_iva_id", articolo?.codice_iva_id ?? iva22)} className={campo}>
+            {ivaVisibili.map((c) => (
+              <option key={c.id} value={c.id}>{c.codice} – {c.descrizione}</option>
+            ))}
+          </select>
+        </label>
         <label className={`${etichetta} col-span-2`}>
           Fornitore abituale
           <select name="fornitore_id" defaultValue={v("fornitore_id", articolo?.fornitore_id ?? "")} className={campo}>

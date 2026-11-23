@@ -34,10 +34,11 @@ src/
     (app)/               tutte le pagine riservate (le parentesi non compaiono nell'indirizzo)
       layout.tsx         barra laterale + controllo utente attivo
       page.tsx           Dashboard
-      preventivi/ produzione/ timbrature/ anagrafiche/ impostazioni/
+      preventivi/ produzione/ magazzino/ timbrature/ anagrafiche/ impostazioni/
   components/            pezzi di interfaccia riutilizzabili (BarraLaterale, ElencoDipendenti…)
   lib/
     validazioni.ts       controlli P.IVA / codice fiscale (cifra di controllo), lettura numeri "12,50", formato euro
+    magazzino.ts         quantità e unità di magazzino («10 lastre»), livello dell'avviso
     ruoli.ts             ruoli e SEZIONI: chi vede quale scheda (unico punto da modificare)
     utente.ts            leggiUtente(), richiediUtente(), richiediRuolo(), richiediSezione()
     azioni-accesso.ts    login e logout
@@ -55,9 +56,9 @@ docs/                    questi documenti
 - I moduli lunghi sono componenti `"use client"` con `useActionState`: se il salvataggio non va, il modulo resta compilato e mostra l'errore.
 
 ## Regole
-1. **Il database si cambia solo con file in `supabase/migrations/`**, numerati in ordine (`0001_fondamenta.sql`, `0002_anagrafiche.sql`, `0003_preventivi.sql`, `0004_lastre.sql`, `0005_stampa.sql`, `0006_categorie_merceologiche.sql`…), mai a mano dal pannello. Così lo stesso schema si ricrea identico su `gestionale-prod`. Per ora una migrazione si applica incollando il file intero in Supabase → **SQL Editor** → Run (una volta sola per database). Una migrazione **non ancora applicata** da nessuna parte si può ancora correggere; una già applicata no (si crea la successiva).
+1. **Il database si cambia solo con file in `supabase/migrations/`**, numerati in ordine (`0001_fondamenta.sql`, `0002_anagrafiche.sql`, `0003_preventivi.sql`, `0004_lastre.sql`, `0005_stampa.sql`, `0006_categorie_merceologiche.sql`, `0007_magazzino_ordini.sql`…), mai a mano dal pannello. Così lo stesso schema si ricrea identico su `gestionale-prod`. Per ora una migrazione si applica incollando il file intero in Supabase → **SQL Editor** → Run (una volta sola per database). Una migrazione **non ancora applicata** da nessuna parte si può ancora correggere; una già applicata no (si crea la successiva).
 2. **`docs/SCHEMA-DATABASE.md` è la fonte di verità** sulle tabelle: chi cambia una tabella lo aggiorna.
-3. Le **tabelle condivise** (`profili`, `dipendenti`, `soggetti`, `articoli`, `codici_iva`, `preventivi`, `numeratori`, `commesse`, `registro_modifiche`) si modificano con cautela: altre sezioni le usano.
+3. Le **tabelle condivise** (`profili`, `dipendenti`, `soggetti`, `articoli`, `codici_iva`, `preventivi`, `numeratori`, `commesse`, `movimenti_magazzino`, `registro_modifiche`) si modificano con cautela: altre sezioni le usano.
 4. Interfaccia e nomi in **italiano**.
 5. Le chiavi stanno solo in `.env.local` (mai su GitHub, mai in chat).
 6. A fine lavoro: `git add .` → `git commit -m "..."` → `git push`.
@@ -109,6 +110,9 @@ Ogni chat di sezione inizia con: *"Leggi ARCHITETTURA.md e SCHEMA-DATABASE.md, p
 - [x] Preventivi passo 5 (22/11): scheda «Modelli di lavorazione» (elenco con costo e prezzo indicativi ai costi di oggi, pagina del modello, archivia/ripristina); nel preventivo «Parti da un modello» (aggiungi o sostituisci le fasi, costi di oggi), «Salva come modello» e «Duplica» (nuova bozza, si sceglie se tenere i costi o aggiornarli a oggi; il prezzo corretto a mano non si copia). Nessuna migrazione nuova. Provato su `gestionale-dev` come titolare
 - [x] Preventivi passo 6 (22/11): `0005_stampa.sql` (tabella `azienda`, note per il cliente e prezzi per fase nei preventivi) provata in locale e applicata su `gestionale-dev`; Impostazioni → «Dati dell'azienda» con logo; pagina di stampa A4 `/stampa/preventivi/<id>` («Stampa → Salva come PDF»), prezzo diviso tra le fasi con somma esatta. Provata su `gestionale-dev` con dati azienda **di prova** (da sostituire con quelli veri)
 - [x] Anagrafiche: categorie merceologiche dei **materiali** (23/11): `0006_categorie_merceologiche.sql` (una categoria per articolo, più categorie per fornitore, niente categorie per i clienti) provata in locale con PGlite, applicata su `gestionale-dev` e provata nel browser; filtro «Categoria» e colonna negli elenchi Articoli e Fornitori, categorie multiple nella scheda fornitore
+- [ ] **Magazzino e ordini d'acquisto** (richiesta del datore di lavoro, piano approvato il 23/11). Decisioni: giacenza = somma dei movimenti; lastre e bobine contate intere; sotto zero solo avviso; scarico dalla commessa quando si conferma il materiale usato; gli operai registrano carichi e scarichi. Passi: 1) migrazione `0007_magazzino_ordini.sql`, 2) giacenza e avviso sotto scorta negli Articoli, rettifica/quantità iniziale, 3) ordini d'acquisto («Ordina» dalla scheda articolo, elenco, pagina, stampa PDF `/stampa/ordini/<id>`), 4) «Registra arrivo», 5) avviso disponibilità nel preventivo, 6) scarico dalle commesse (con la sezione Produzione). Nuova voce di menu **Magazzino** (anche per gli operai)
+  - [x] Passo 1: `0007_magazzino_ordini.sql` scritta e provata in locale con PGlite, applicata su `gestionale-dev` (23/11)
+  - [x] Passo 2 (23/11): colonna **Giacenza** nell'elenco Articoli (rossa sotto zero, arancione sotto scorta, «in arrivo»), riquadro giacenza e campi «Scorta minima» e «Lunghezza bobina» nella scheda articolo; nuova scheda **Magazzino** (`/magazzino`, tutti i ruoli): elenco giacenze con ricerca e filtro «Da riordinare o sotto zero», per ogni articolo carico/scarico (tutti), inventario con la quantità contata (titolare e ufficio), ultimi movimenti con «Annulla» (titolare e ufficio). Provato su `gestionale-dev` come titolare (23/11): inventario, scarico, avviso sotto scorta, filtro, annullamento, vista da telefono. Nell'elenco Articoli il codice va sotto la descrizione e la colonna IVA è tolta (si vede nella scheda; sotto il costo solo se diverso da 22). Da provare con un account **operaio**
 - [ ] Preventivi: passo 7 (PDF vero e invio email) — **rimandato (22/11)**: si fa dopo l'approvazione del progetto da parte del datore di lavoro. Piano proposto in «Da fare più avanti (Preventivi)». Nel frattempo il PDF si ottiene con «Stampa → Salva come PDF» e si allega a mano
 - [ ] Produzione
 - [ ] Timbrature

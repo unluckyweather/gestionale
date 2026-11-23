@@ -2,10 +2,11 @@
 import Link from "next/link";
 import { creaClientServer } from "@/lib/supabase/server";
 import { euro } from "@/lib/validazioni";
+import Giacenza from "@/components/Giacenza";
 import ModuloArticolo from "./ModuloArticolo";
 import { indirizzo, pulisciRicerca, SENZA_CATEGORIA } from "./indirizzo";
 import { riquadro } from "./stile";
-import type { Articolo, Categoria, CodiceIva } from "./tipi";
+import type { Articolo, Categoria, CodiceIva, Giacenza as RigaGiacenza } from "./tipi";
 
 type Props = {
   q?: string;
@@ -46,13 +47,13 @@ export default async function SchedaArticoli({ q, id, archiviati, categoria, cat
 
   const nuovo = id === "nuovo";
   const conId = Boolean(id && !nuovo);
-  const [risElenco, risScelto, risIva, risFornitori] = await Promise.all([
+  const [risElenco, risScelto, risIva, risFornitori, risGiacenze] = await Promise.all([
     query,
     conId
       ? supabase
           .from("articoli")
           .select(
-            "id, codice, descrizione, tipo, unita_misura, costo_unitario, larghezza_bobina_m, lastra_larghezza_cm, lastra_altezza_cm, codice_iva_id, fornitore_id, categoria_id, note, attivo, aggiornato_il"
+            "id, codice, descrizione, tipo, unita_misura, costo_unitario, larghezza_bobina_m, bobina_lunghezza_m, lastra_larghezza_cm, lastra_altezza_cm, codice_iva_id, fornitore_id, categoria_id, scorta_minima, note, attivo, aggiornato_il"
           )
           .eq("id", id!)
           .maybeSingle()
@@ -68,7 +69,10 @@ export default async function SchedaArticoli({ q, id, archiviati, categoria, cat
       .in("tipo", ["fornitore", "entrambi"])
       .order("denominazione")
       .limit(2000),
+    // giacenze (somma dei movimenti), calcolate dal database
+    supabase.from("magazzino").select("articolo_id, unita, giacenza, in_arrivo, sotto_scorta").limit(5000),
   ]);
+  const giacenze = new Map(((risGiacenze.data ?? []) as RigaGiacenza[]).map((g) => [g.articolo_id, g]));
 
   const elenco = (risElenco.data ?? []) as unknown as RigaElenco[];
   const scelto = (risScelto.data ?? null) as Articolo | null;
@@ -91,24 +95,23 @@ export default async function SchedaArticoli({ q, id, archiviati, categoria, cat
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-slate-200 text-left text-xs font-semibold tracking-wide text-slate-500 uppercase">
-                <th className="px-4 py-3">Codice</th>
                 <th className="px-4 py-3">Descrizione</th>
                 <th className="px-4 py-3">Categoria</th>
                 <th className="px-4 py-3">Fornitore</th>
+                <th className="px-4 py-3 text-right">Giacenza</th>
                 <th className="px-4 py-3 text-right">Costo</th>
-                <th className="px-4 py-3 text-right">IVA</th>
               </tr>
             </thead>
             <tbody>
               {elenco.map((a) => {
                 const selezionato = a.id === scelto?.id;
+                const g = giacenze.get(a.id);
                 return (
                   <tr
                     key={a.id}
                     className={`border-b border-slate-100 ${selezionato ? "bg-blue-50" : "hover:bg-slate-50"} ${a.attivo ? "" : "text-slate-400"}`}
                   >
-                    <td className="px-4 py-3 whitespace-nowrap text-slate-500">{a.codice}</td>
-                    <td className="px-4 py-3">
+                    <td className="min-w-44 px-4 py-3">
                       <Link
                         href={indirizzo({ scheda: "articoli", q: ricerca, categoria, id: a.id, archiviati: archiviati ? "1" : undefined })}
                         aria-current={selezionato ? "true" : undefined}
@@ -125,13 +128,20 @@ export default async function SchedaArticoli({ q, id, archiviati, categoria, cat
                         </span>
                       )}
                       {!a.attivo && <span className="ml-2 text-xs">(archiviato)</span>}
+                      {a.codice && <div className="text-xs text-slate-500">{a.codice}</div>}
                     </td>
                     <td className="px-4 py-3">{a.categoria?.descrizione}</td>
                     <td className="px-4 py-3">{a.fornitore?.denominazione}</td>
                     <td className="px-4 py-3 text-right whitespace-nowrap">
-                      {euro(a.costo_unitario)} <span className="text-slate-400">/ {a.unita_misura}</span>
+                      {g && <Giacenza giacenza={g.giacenza} unita={g.unita} sottoScorta={g.sotto_scorta} />}
+                      {g && Number(g.in_arrivo) > 0 && (
+                        <div className="text-xs text-slate-500">+{Number(g.in_arrivo).toLocaleString("it-IT")} in arrivo</div>
+                      )}
                     </td>
-                    <td className="px-4 py-3 text-right">{a.iva?.codice}</td>
+                    <td className="px-4 py-3 text-right whitespace-nowrap">
+                      {euro(a.costo_unitario)} <span className="text-slate-400">/ {a.unita_misura}</span>
+                      {a.iva && a.iva.codice !== "22" && <div className="text-xs text-slate-500">IVA {a.iva.codice}</div>}
+                    </td>
                   </tr>
                 );
               })}
@@ -152,6 +162,7 @@ export default async function SchedaArticoli({ q, id, archiviati, categoria, cat
           <ModuloArticolo
             key={scelto ? `${scelto.id}-${scelto.aggiornato_il}` : "nuovo"}
             articolo={scelto}
+            giacenza={scelto ? (giacenze.get(scelto.id) ?? null) : null}
             codiciIva={(risIva.data ?? []) as CodiceIva[]}
             fornitori={(risFornitori.data ?? []) as { id: string; denominazione: string; attivo: boolean }[]}
             categorie={categorie}

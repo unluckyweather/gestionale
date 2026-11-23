@@ -348,12 +348,26 @@ export async function salvaArticolo(_prima: StatoModulo, dati: FormData): Promis
   if (lastraL !== null && larghezza !== null)
     return sbaglio("Un articolo è in bobina oppure a lastra: togli la larghezza della bobina o le misure della lastra.");
 
+  const lunghezzaTesto = testo(dati, "bobina_lunghezza_m");
+  const lunghezza = lunghezzaTesto ? leggiNumero(lunghezzaTesto) : null;
+  if (lunghezzaTesto && (lunghezza === null || lunghezza <= 0 || lunghezza >= 1000000))
+    return sbaglio("La lunghezza della bobina non è valida (in metri, es. 50).");
+  if (lunghezza !== null && larghezza === null)
+    return sbaglio("La lunghezza della bobina serve solo ai materiali in bobina: scrivi anche la larghezza, oppure toglila.");
+
+  const scortaTesto = testo(dati, "scorta_minima");
+  const scorta = scortaTesto ? leggiNumero(scortaTesto) : null;
+  if (scortaTesto && (scorta === null || scorta < 0 || scorta >= 1e9))
+    return sbaglio("La scorta minima non è un numero valido.");
+
   const record = {
     codice: oNull(testo(dati, "codice")),
     descrizione: testo(dati, "descrizione"),
     unita_misura: testo(dati, "unita_misura"),
     costo_unitario: costo,
     larghezza_bobina_m: larghezza,
+    bobina_lunghezza_m: lunghezza,
+    scorta_minima: scorta,
     lastra_larghezza_cm: lastraL,
     lastra_altezza_cm: lastraH,
     codice_iva_id: oNull(testo(dati, "codice_iva_id")),

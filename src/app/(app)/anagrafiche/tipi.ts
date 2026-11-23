@@ -127,9 +127,20 @@ export type Articolo = {
   codice_iva_id: string | null;
   fornitore_id: string | null;
   categoria_id: string | null; // categoria merceologica (Bobine, Lastre, Adesivi…)
+  scorta_minima: number | null; // in unità di magazzino (lastre, bobine, pz…): sotto → avviso
+  bobina_lunghezza_m: number | null; // solo bobine: metri lineari di una bobina intera
   note: string | null;
   attivo: boolean;
   aggiornato_il: string;
+};
+
+/** Una riga della vista "magazzino" (giacenze, senza costi). */
+export type Giacenza = {
+  articolo_id: string;
+  unita: string; // unità di magazzino: lastra, bobina, oppure l'unità dell'articolo
+  giacenza: number;
+  in_arrivo: number;
+  sotto_scorta: boolean;
 };
 
 export const ETICHETTE_TIPO_SOGGETTO: Record<TipoSoggetto, string> = {

@@ -26,6 +26,8 @@ export const SEZIONI: Sezione[] = [
   { href: "/", etichetta: "Dashboard", ruoli: TUTTI },
   { href: "/preventivi", etichetta: "Preventivi", ruoli: UFFICI },
   { href: "/produzione", etichetta: "Produzione", ruoli: TUTTI },
+  // gli operai vedono le giacenze (senza costi) e registrano carichi e scarichi
+  { href: "/magazzino", etichetta: "Magazzino", ruoli: TUTTI },
   { href: "/timbrature", etichetta: "Timbrature", ruoli: TUTTI },
   { href: "/anagrafiche", etichetta: "Anagrafiche", ruoli: UFFICI },
   { href: "/impostazioni", etichetta: "Impostazioni", ruoli: ["titolare"] },

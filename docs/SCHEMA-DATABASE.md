@@ -2,7 +2,7 @@
 
 > **Documento di riferimento condiviso.** Ogni chat del progetto lo legge prima di toccare il database.
 > Chi aggiunge o modifica una tabella aggiorna questo file nello stesso momento.
-> Stato: **v0.9** (23/11/2026) – Fondamenta in `0001_fondamenta.sql` e Anagrafiche in `0002_anagrafiche.sql` (entrambe applicate su `gestionale-dev`). Preventivi in `0003_preventivi.sql` (applicata su `gestionale-dev`). Materiali a lastra in `0004_lastre.sql`, stampa in `0005_stampa.sql` (entrambe applicate su `gestionale-dev`). Categorie merceologiche dei materiali in `0006_categorie_merceologiche.sql` (applicata su `gestionale-dev`). Le altre sezioni sono bozza.
+> Stato: **v0.9** (23/11/2026) – Fondamenta in `0001_fondamenta.sql` e Anagrafiche in `0002_anagrafiche.sql` (entrambe applicate su `gestionale-dev`). Preventivi in `0003_preventivi.sql` (applicata su `gestionale-dev`). Materiali a lastra in `0004_lastre.sql`, stampa in `0005_stampa.sql` (entrambe applicate su `gestionale-dev`). Categorie merceologiche dei materiali in `0006_categorie_merceologiche.sql` (applicata su `gestionale-dev`). Magazzino e ordini d'acquisto in `0007_magazzino_ordini.sql` (applicata su `gestionale-dev` il 23/11). Le altre sezioni sono bozza.
 > Mockup confermato (19/11): https://claude.ai/artifact/B5LEbqMxrBA2FJXqQu8U4s — preventivi a fasi + scheda cliente/fornitore "proposta v3".
 
 ## Regole comuni a tutte le tabelle
@@ -219,6 +219,8 @@ Dati iniziali: Rimessa diretta (0), Bonifico 30 gg (30), Bonifico 60 gg (60).
 | codice_iva_id | uuid → codici_iva | predefinito 22 |
 | fornitore_id | uuid → soggetti | facoltativo: fornitore abituale |
 | categoria_id | uuid → categorie_merceologiche | (0006) facoltativa: tipo di materiale |
+| scorta_minima | numeric(12,3) | (0007) facoltativa, in unità di magazzino: sotto questa giacenza l'app avvisa |
+| bobina_lunghezza_m | numeric(8,2) | (0007) solo bobine: metri lineari della bobina intera (serve al costo di una bobina negli ordini) |
 | note | text | |
 
 > Trigger `a_normalizza` (`normalizza_articolo`): toglie spazi, codice vuoto → null, codice IVA vuoto → il codice "22" attivo.
@@ -421,6 +423,81 @@ Tutte le tabelle hanno `attivo`, i campi `creato_*`/`aggiornato_*`, i trigger `b
 
 ---
 
+## 6b. Magazzino e ordini d'acquisto — v1.0 (23/11), in `0007_magazzino_ordini.sql` (applicata su `gestionale-dev`)
+
+Richiesta del datore di lavoro dopo le prove del 23/11: dall'articolo si crea un **ordine d'acquisto** (PDF da mandare al fornitore); accanto a ogni articolo c'è la **quantità in magazzino**, che sale con gli arrivi e scende con i materiali usati nelle commesse, con un avviso quando non basta.
+
+**Decisioni del 23/11:**
+- La giacenza **non si scrive a mano**: è la somma dei **movimenti** (carico +, scarico −, rettifica ±). Un movimento sbagliato non si modifica: si archivia e se ne registra uno nuovo. Così resta lo storico.
+- **Unità di magazzino**: articolo a lastra → **lastre intere**; in bobina → **bobine intere**; gli altri → la loro unità di misura. Funzione `unita_magazzino(articolo)`.
+- **Sotto zero si può andare**: è un avviso, non un blocco (il materiale può esserci fisicamente senza essere stato registrato).
+- Lo scarico dalle commesse si registra **quando si conferma il materiale usato davvero** (quantità proposte dal preventivo, modificabili); prima risulta "impegnato". Si fa con la sezione Produzione (colonna `movimenti_magazzino.commessa_id` da aggiungere allora).
+- **Gli operai registrano carichi e scarichi** (non rettifiche, non arrivi d'ordine, non annullamenti) e vedono le giacenze, ma **mai i costi**.
+- Le righe degli ordini sono **solo articoli del catalogo**, così ogni arrivo finisce nella giacenza giusta.
+
+Enum nuovi: `stato_ordine_acquisto` (`bozza`, `inviato`, `ricevuto_parziale`, `ricevuto`, `annullato`), `tipo_movimento` (`carico`, `scarico`, `rettifica`).
+
+### `ordini_acquisto`
+| campo | tipo | note |
+|---|---|---|
+| anno, progressivo, numero | | come i preventivi: `3/26` (numeratore `ordine_acquisto`), assegnati dal database |
+| soggetto_id | uuid → soggetti | **fornitore** (o `entrambi`), obbligatorio |
+| data | date | predefinita oggi |
+| consegna_prevista | date | facoltativa, non prima della data |
+| stato | stato_ordine_acquisto | predefinito `bozza`; `ricevuto_parziale`/`ricevuto` li imposta il database con gli arrivi |
+| riferimento_fornitore | text | es. numero della loro offerta |
+| note_fornitore | text | stampate nell'ordine |
+| note | text | interne |
+
+> Trigger `a_numera`, `a_normalizza` (solo fornitori), `a_proteggi`: numero fisso; un ordine non più in bozza/inviato (arrivato anche in parte, o annullato) accetta solo cambio di stato, note interne e archiviazione.
+
+### `righe_ordine_acquisto`
+| campo | tipo | note |
+|---|---|---|
+| ordine_id | uuid → ordini_acquisto | |
+| ordine | int | posizione |
+| articolo_id | uuid → articoli | **obbligatorio** |
+| descrizione | text | se vuota: dall'articolo |
+| unita_misura | text | sempre l'unità di magazzino dell'articolo (la scrive il database) |
+| quantita | numeric(12,3) | > 0, in unità di magazzino |
+| costo_unitario | numeric(12,4) | se vuoto: `costo_unita_magazzino(articolo)` = prezzo della lastra, oppure costo al m² × larghezza × lunghezza della bobina, oppure costo unitario. Bobina senza lunghezza → va scritto a mano |
+
+> Le righe si modificano solo con l'ordine in bozza o inviato. La quantità **arrivata** non si salva qui: si calcola dai movimenti (vista `righe_ordine_riepilogo`).
+
+### `movimenti_magazzino`
+| campo | tipo | note |
+|---|---|---|
+| articolo_id | uuid → articoli | |
+| data | date | predefinita oggi |
+| tipo | tipo_movimento | |
+| quantita | numeric(12,3) | **con il segno**: carico > 0, scarico < 0, rettifica ≠ 0 |
+| riga_ordine_id | uuid → righe_ordine_acquisto | solo carichi da un ordine (l'articolo lo copia il database dalla riga) |
+| note | text | |
+| attivo | bool | `false` = movimento annullato |
+
+> Dopo la creazione si cambiano solo `note` e `attivo` (trigger `a_normalizza`). Trigger `y_stato_ordine`: dopo un arrivo, o il suo annullamento, ricalcola lo stato dell'ordine (`aggiorna_stato_ordine`): tutto arrivato → `ricevuto`, qualcosa → `ricevuto_parziale`, niente → `inviato`; un ordine annullato non cambia.
+
+### Viste
+- **`magazzino`**: per ogni articolo `codice`, `descrizione`, `categoria`, `unita` (di magazzino), `giacenza`, `in_arrivo` (ordinato in ordini inviati/ricevuti in parte e non ancora arrivato), `scorta_minima`, `sotto_scorta`, `ultimo_movimento`, `attivo`. **Senza costi.** Non è `security_invoker` (gli operai non leggono `articoli`): la leggono tutti gli utenti attivi, grazie al filtro sul ruolo dentro la vista.
+- **`righe_ordine_riepilogo`** (`security_invoker`): per riga `quantita`, `arrivato`, `da_ricevere`, `importo`.
+- **`ordini_acquisto_riepilogo`** (`security_invoker`): per ordine `righe`, `imponibile` (IVA esclusa), `da_ricevere`.
+
+### Funzioni
+- **`salva_ordine_acquisto(p_id, p_ordine, p_righe)`**: come `salva_preventivo` (tutto o niente; righe con `id` aggiornate, senza nuove, mancanti archiviate). Lo stato si cambia con un update. Restituisce l'id.
+- **`registra_arrivo(p_ordine_id, p_righe, p_data, p_note)`**: `p_righe` = `[{ riga_id, quantita }]`; crea i carichi (righe a 0 ignorate, si può ricevere più dell'ordinato). Restituisce quante righe ha registrato.
+
+### Permessi Magazzino
+| | Titolare | Ufficio | Contabilità | Operaio |
+|---|---|---|---|---|
+| ordini_acquisto, righe | lettura, inserimento, modifica | lettura, inserimento, modifica | lettura | — |
+| movimenti_magazzino | lettura, tutti i tipi, archiviazione | lettura, tutti i tipi, archiviazione | lettura | lettura; inserimento solo `carico`/`scarico` senza ordine |
+| vista magazzino | sì | sì | sì | sì (senza costi) |
+
+Tutte le tabelle hanno `attivo`, i campi `creato_*`/`aggiornato_*`, i trigger `b_aggiornamento`, `vieta_cancellazione`, `z_registro`.
+Provata in locale con PGlite (23/11): numerazione, unità e costo di lastre e bobine, arrivi parziali e completi, stato automatico, scarichi degli operai, sotto scorta e sotto zero, permessi dei 4 ruoli e degli utenti non collegati.
+
+---
+
 ## 6. Contabilità / quinta scheda
 Da definire. La scheda anagrafica prepara già i dati per la fatturazione elettronica (XML, scadenze, Ri.Ba., reverse charge, dichiarazioni d'intento): se la quinta scheda sarà la fatturazione, partirà da qui.
 
@@ -438,4 +515,4 @@ Da definire. La scheda anagrafica prepara già i dati per la fatturazione elettr
 | Timbrature | tutto | lettura e correzione | lettura ed export | solo le proprie, solo nuove |
 | Registro modifiche | lettura | — | — | — |
 
-Schede visibili nel menu (da `src/lib/ruoli.ts`): Dashboard, Produzione, Timbrature a tutti; Preventivi e Anagrafiche a titolare, ufficio, contabilità; Impostazioni solo al titolare.
+Schede visibili nel menu (da `src/lib/ruoli.ts`): Dashboard, Produzione, Magazzino, Timbrature a tutti; Preventivi e Anagrafiche a titolare, ufficio, contabilità; Impostazioni solo al titolare.
