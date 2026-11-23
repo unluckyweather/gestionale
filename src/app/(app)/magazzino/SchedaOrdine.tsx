@@ -6,11 +6,11 @@ import { riquadro } from "../anagrafiche/stile";
 import ModuloOrdine, { type Arrivo, type ArticoloScelta, type Fornitore, type OrdineSalvato, type RigaSalvata } from "./ModuloOrdine";
 import { indirizzo, oggiItalia } from "./comuni";
 
-type Props = { id: string; articolo?: string; modificabile: boolean; ok?: string; errore?: string };
+type Props = { id: string; articolo?: string; quantita?: string; modificabile: boolean; ok?: string; errore?: string };
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-export default async function SchedaOrdine({ id, articolo, modificabile, ok, errore }: Props) {
+export default async function SchedaOrdine({ id, articolo, quantita, modificabile, ok, errore }: Props) {
   const nuovo = id === "nuovo";
   if (nuovo && !modificabile) return <Avviso testo="Non hai i permessi per creare ordini d'acquisto." />;
   if (!nuovo && !UUID.test(id)) return <Avviso testo="Ordine non trovato." />;
@@ -99,6 +99,7 @@ export default async function SchedaOrdine({ id, articolo, modificabile, ok, err
       fornitori={fornitori}
       articoli={articoli}
       daArticolo={daArticolo}
+      daQuantita={quantita && /^\d+([.,]\d{1,3})?$/.test(quantita) ? quantita.replace(".", ",") : undefined}
       oggi={oggiItalia()}
       modificabile={modificabile}
       ok={ok}

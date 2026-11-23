@@ -23,6 +23,9 @@ export type ArticoloScelto = {
   larghezza_bobina_m: number | null;
   lastra_larghezza_cm: number | null; // articolo a lastra: misure in cm, costo_unitario = prezzo della lastra
   lastra_altezza_cm: number | null;
+  bobina_lunghezza_m?: number | null; // (0007) metri di una bobina intera
+  giacenza?: number; // (0007) dalla vista "magazzino", nell'unità di magazzino
+  in_arrivo?: number;
 };
 
 export type CodiceIvaScelto = { id: string; codice: string; descrizione: string; aliquota: number; attivo: boolean };

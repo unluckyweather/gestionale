@@ -13,6 +13,8 @@ import { inEuro, perCampo, totali as calcolaTotali } from "./calcoli";
 import { EtichettaStato, STATI, indirizzo, ore as scriviOre, percento, type Stato } from "./comuni";
 import { aggiornaCosti, bozzaFasi, calcolaFasi, copiaFasi, etichetteUniche, s } from "./bozze";
 import { ElencoFasi, Voce } from "./ElencoFasi";
+import { disponibilita, type Disponibilita } from "./disponibilita";
+import { quantita as scriviQuantita, quantitaConUnita } from "@/lib/magazzino";
 import type {
   ArticoloScelto,
   BozzaFase,
@@ -83,6 +85,10 @@ export default function ModuloPreventivo(props: Props) {
   );
   const [testata, setTestata] = useState<BozzaTestata>(iniziale.testata);
   const [fasi, setFasi] = useState<BozzaFase[]>(iniziale.fasi);
+
+  // --- materiali del catalogo: quanto serve e quanto c'è in magazzino (solo avviso) ---
+  const materiali = useMemo(() => disponibilita(fasi, articoli), [fasi, articoli]);
+  const nonBastano = useMemo(() => new Set(materiali.filter((m) => m.mancano > 0).map((m) => m.articolo.id)), [materiali]);
 
   // --- suggerimenti per cliente e materiali ---
   const mappaClienti = useMemo(() => etichetteUniche(clienti, etichettaCliente), [clienti]);
@@ -405,6 +411,7 @@ export default function ModuloPreventivo(props: Props) {
               articoli={articoli}
               solaLettura={solaLettura}
               chiedi={chiedi}
+              nonBastano={nonBastano}
               vuoto="Nessuna fase. Un preventivo è fatto di fasi (es. Grafica, Stampa, Posa), ognuna con ore di lavoro e materiali."
             />
 
@@ -455,6 +462,7 @@ export default function ModuloPreventivo(props: Props) {
                 <span>Totale</span>
                 <span className="tabular-nums">{euro(inEuro(t.totale))}</span>
               </div>
+              {materiali.length > 0 && <MaterialiInMagazzino elenco={materiali} ordina={modificabile} />}
               <p className="mt-1.5 rounded-lg bg-blue-50 p-3 text-[13px] leading-snug text-blue-950">
                 Il cliente vede solo le <strong>descrizioni delle fasi</strong> e il prezzo. Ore, costi e ricarico restano interni.
               </p>
@@ -538,5 +546,63 @@ function BarraStato({ id, stato, archiviato, modificato, chiedi }: PropsBarra) {
         {archiviato ? "Ripristina" : "Archivia"}
       </button>
     </div>
+  );
+}
+
+// ---------------------------------------------------------------------
+// Materiali in magazzino: per ogni articolo del catalogo usato, quanto serve
+// (in lastre, bobine, pz…) e quanto ce n'è. Solo un avviso: non prenota niente.
+// ---------------------------------------------------------------------
+function MaterialiInMagazzino({ elenco, ordina }: { elenco: Disponibilita[]; ordina: boolean }) {
+  const mancanti = elenco.filter((m) => m.mancano > 0).length;
+  return (
+    <section
+      aria-label="Materiali in magazzino"
+      className={`mt-1.5 flex flex-col gap-2 rounded-lg border p-3 text-[13px] ${mancanti ? "border-amber-300 bg-amber-50" : "border-slate-200"}`}
+    >
+      <h3 className="font-semibold">
+        Materiali in magazzino
+        {mancanti > 0 && <span className="ml-1 text-amber-900">· {mancanti} da ordinare</span>}
+      </h3>
+      <ul className="flex flex-col gap-2">
+        {elenco.map((m) => (
+          <li key={m.articolo.id} className="flex flex-col gap-0.5">
+            <span className="font-medium">{m.articolo.descrizione}</span>
+            {m.servono === null ? (
+              <span className="text-slate-500">
+                In magazzino {quantitaConUnita(m.giacenza, m.unita)}.
+                {m.unita === "bobina" ? " Per sapere quante bobine servono, scrivi la lunghezza della bobina nella scheda dell'articolo." : " Completa i dati della riga per il confronto."}
+              </span>
+            ) : (
+              <span className={m.mancano > 0 ? "text-amber-900" : "text-slate-600"}>
+                Servono {quantitaConUnita(m.servono, m.unita)} · in magazzino {scriviQuantita(m.giacenza)}
+                {m.inArrivo > 0 && ` (+${scriviQuantita(m.inArrivo)} in arrivo)`}
+                {m.mancano > 0 ? (
+                  <strong> → ne mancano {scriviQuantita(m.mancano)}</strong>
+                ) : (
+                  <span className="text-green-800"> ✓</span>
+                )}
+              </span>
+            )}
+            {m.mancano > 0 && m.inArrivo >= m.mancano && (
+              <span className="text-xs text-slate-600">Quelli in arrivo dagli ordini bastano.</span>
+            )}
+            {m.mancano > 0 && ordina && (
+              <a
+                href={`/magazzino?scheda=ordini&id=nuovo&articolo=${m.articolo.id}&quantita=${Math.ceil(m.mancano)}`}
+                target="_blank"
+                rel="noopener"
+                className="self-start text-xs font-semibold text-blue-700 hover:underline"
+              >
+                Ordina al fornitore ↗
+              </a>
+            )}
+          </li>
+        ))}
+      </ul>
+      <p className="text-xs text-slate-500">
+        Solo un controllo: il materiale non viene prenotato né scaricato. Non tiene conto di altri preventivi o lavori in corso.
+      </p>
+    </section>
   );
 }

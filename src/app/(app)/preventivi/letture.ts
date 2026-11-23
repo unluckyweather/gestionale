@@ -39,20 +39,35 @@ export async function leggiFasi(
   }));
 }
 
-/** Tariffe (tutte, anche archiviate) e catalogo materiali attivo, per scegliere e per i costi di oggi. */
+/**
+ * Tariffe (tutte, anche archiviate) e catalogo materiali attivo, per scegliere e per i costi di oggi.
+ * Ogni articolo ha anche giacenza e quantità in arrivo (vista "magazzino", 0007).
+ */
 export async function leggiTariffeArticoli(supabase: Client) {
-  const [tariffe, articoli] = await Promise.all([
+  const [tariffe, articoli, magazzino] = await Promise.all([
     supabase.from("tariffe_orarie").select("id, nome, costo_orario, attivo").order("tipo").order("nome"),
     supabase
       .from("articoli")
-      .select("id, codice, descrizione, unita_misura, costo_unitario, larghezza_bobina_m, lastra_larghezza_cm, lastra_altezza_cm")
+      .select("id, codice, descrizione, unita_misura, costo_unitario, larghezza_bobina_m, bobina_lunghezza_m, lastra_larghezza_cm, lastra_altezza_cm")
       .eq("attivo", true)
       .order("descrizione")
       .limit(5000),
+    supabase.from("magazzino").select("articolo_id, giacenza, in_arrivo").eq("attivo", true).limit(5000),
   ]);
   if (tariffe.error || articoli.error) {
     console.error("Lettura di tariffe o articoli non riuscita:", (tariffe.error ?? articoli.error)?.message);
     return null;
   }
-  return { tariffe: (tariffe.data ?? []) as TariffaScelta[], articoli: (articoli.data ?? []) as ArticoloScelto[] };
+  // le giacenze sono solo un aiuto: se non si leggono, il preventivo funziona lo stesso (senza avvisi)
+  if (magazzino.error) console.error("Lettura delle giacenze non riuscita:", magazzino.error.message);
+  const giacenze = new Map(
+    ((magazzino.data ?? []) as { articolo_id: string; giacenza: number; in_arrivo: number }[]).map((g) => [g.articolo_id, g])
+  );
+  return {
+    tariffe: (tariffe.data ?? []) as TariffaScelta[],
+    articoli: ((articoli.data ?? []) as ArticoloScelto[]).map((a) => {
+      const g = giacenze.get(a.id);
+      return g ? { ...a, giacenza: Number(g.giacenza), in_arrivo: Number(g.in_arrivo) } : a;
+    }),
+  };
 }

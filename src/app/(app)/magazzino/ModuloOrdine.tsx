@@ -80,6 +80,7 @@ type Props = {
   fornitori: Fornitore[];
   articoli: ArticoloScelta[];
   daArticolo?: ArticoloScelta; // «Ordina» dalla scheda di un articolo
+  daQuantita?: string; // «Ordina» da un preventivo: quanto manca
   oggi: string;
   modificabile: boolean;
   ok?: string;
@@ -132,7 +133,7 @@ export default function ModuloOrdine(props: Props) {
           costo_unitario: numeroPerCampo(r.costo_unitario),
           arrivato: r.arrivato,
         }))
-      : [rigaPer(props.daArticolo)];
+      : [{ ...rigaPer(props.daArticolo), ...(props.daQuantita ? { quantita: props.daQuantita } : {}) }];
     return { testata, righe };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);

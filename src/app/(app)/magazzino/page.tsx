@@ -16,6 +16,7 @@ type Parametri = {
   stato?: string;
   archiviati?: string;
   articolo?: string;
+  quantita?: string;
   ok?: string;
   errore?: string;
 };
@@ -27,7 +28,7 @@ export default async function Magazzino({ searchParams }: { searchParams: Promis
   // gli operai non vedono gli ordini (né i costi): restano sulle giacenze
   if (p.scheda === "ordini" && io.ruolo !== "operaio") {
     const modificabile = io.ruolo === "titolare" || io.ruolo === "ufficio";
-    if (p.id) return <SchedaOrdine id={p.id} articolo={p.articolo} modificabile={modificabile} ok={p.ok} errore={p.errore} />;
+    if (p.id) return <SchedaOrdine id={p.id} articolo={p.articolo} quantita={p.quantita} modificabile={modificabile} ok={p.ok} errore={p.errore} />;
     return <ElencoOrdini p={p} modificabile={modificabile} />;
   }
   return <SchedaGiacenze io={io} p={p} />;

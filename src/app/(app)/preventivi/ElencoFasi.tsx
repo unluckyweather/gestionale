@@ -21,9 +21,10 @@ type PropsElenco = {
   solaLettura: boolean;
   chiedi: (domanda: string, conferma?: string) => Promise<boolean>;
   vuoto: string; // testo quando non ci sono fasi
+  nonBastano?: Set<string>; // id degli articoli che in magazzino non bastano (solo nei preventivi)
 };
 
-export function ElencoFasi({ fasi, setFasi, costi, tariffe, articoli, solaLettura, chiedi, vuoto }: PropsElenco) {
+export function ElencoFasi({ fasi, setFasi, costi, tariffe, articoli, solaLettura, chiedi, vuoto, nonBastano }: PropsElenco) {
   const mappaArticoli = useMemo(() => etichetteUniche(articoli, etichettaArticolo), [articoli]);
 
   const cambiaFase = (chiave: string, cambia: (f: BozzaFase) => BozzaFase) =>
@@ -57,6 +58,7 @@ export function ElencoFasi({ fasi, setFasi, costi, tariffe, articoli, solaLettur
           sposta={(verso) => spostaFase(i, verso)}
           togli={() => togliFase(f, i + 1)}
           solaLettura={solaLettura}
+          nonBastano={nonBastano}
         />
       ))}
       {!solaLettura && (
@@ -102,9 +104,10 @@ type PropsFase = {
   sposta: (verso: -1 | 1) => void;
   togli: () => void;
   solaLettura: boolean;
+  nonBastano?: Set<string>;
 };
 
-function Fase({ fase, numero, totale, costo, tariffe, mappaArticoli, cambia, sposta, togli, solaLettura }: PropsFase) {
+function Fase({ fase, numero, totale, costo, tariffe, mappaArticoli, cambia, sposta, togli, solaLettura, nonBastano }: PropsFase) {
   const nomeFase = fase.titolo || `fase ${numero}`;
 
   const cambiaOre = (chiave: string, campi: Partial<BozzaOre>) =>
@@ -361,6 +364,11 @@ function Fase({ fase, numero, totale, costo, tariffe, mappaArticoli, cambia, spo
                         />
                         <span className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-500">
                           {r.articolo_id ? "Dal catalogo" : "Non a catalogo"}
+                          {r.articolo_id && nonBastano?.has(r.articolo_id) && (
+                            <span className="rounded bg-amber-100 px-1.5 py-0.5 font-semibold text-amber-900" title="Vedi «Materiali in magazzino» nel riepilogo">
+                              ⚠ in magazzino non basta
+                            </span>
+                          )}
                           <label className="inline-flex items-center gap-1.5">
                             Calcolo
                             <select
