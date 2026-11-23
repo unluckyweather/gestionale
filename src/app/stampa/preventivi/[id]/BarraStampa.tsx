@@ -2,11 +2,11 @@
 // Pulsanti sopra il foglio: non vengono stampati (classe print:hidden).
 import Link from "next/link";
 
-export default function BarraStampa({ ritorno }: { ritorno: string }) {
+export default function BarraStampa({ ritorno, etichetta = "← Torna al preventivo" }: { ritorno: string; etichetta?: string }) {
   return (
     <div className="mx-auto mb-4 flex max-w-[210mm] flex-wrap items-center gap-3 px-4 print:hidden">
       <Link href={ritorno} className="text-sm text-blue-700 hover:underline">
-        ← Torna al preventivo
+        {etichetta}
       </Link>
       <span className="flex-1" />
       <span className="text-xs text-slate-500">Nella finestra di stampa scegli «Salva come PDF» per avere il file.</span>

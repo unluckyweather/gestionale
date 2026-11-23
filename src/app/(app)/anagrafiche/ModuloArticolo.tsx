@@ -6,7 +6,7 @@ import { useActionState } from "react";
 import Link from "next/link";
 import GiacenzaBadge from "@/components/Giacenza";
 import { salvaArticolo, type StatoModulo } from "./azioni";
-import { campo, etichetta, pulsante } from "./stile";
+import { campo, etichetta, pulsante, pulsanteSecondario } from "./stile";
 import { numeroPerCampo } from "@/lib/validazioni";
 import { quantitaConUnita } from "@/lib/magazzino";
 import { UNITA_MISURA, type Articolo, type Categoria, type CodiceIva, type Giacenza } from "./tipi";
@@ -60,6 +60,14 @@ export default function ModuloArticolo({ articolo, giacenza, codiciIva, fornitor
             Movimenti →
           </Link>
         </div>
+      )}
+      {articolo && articolo.attivo && modificabile && (
+        <Link
+          href={`/magazzino?scheda=ordini&id=nuovo&articolo=${articolo.id}`}
+          className={`${pulsanteSecondario} justify-center`}
+        >
+          + Ordina al fornitore
+        </Link>
       )}
 
       <input type="hidden" name="id" value={articolo?.id ?? ""} />
