@@ -118,6 +118,7 @@ Ogni chat di sezione inizia con: *"Leggi ARCHITETTURA.md e SCHEMA-DATABASE.md, p
 - Pagina "password dimenticata" (reset in autonomia), prima di dare l'app ai dipendenti veri
 - Decidere la quinta scheda (la fatturazione elettronica è candidata: l'anagrafica ha già i dati)
 - In produzione: progetto Vercel collegato a `gestionale-prod`, dominio aziendale
+- **Eliminazione definitiva delle voci mai usate** (opzione da valutare, 23/11; per ora si tiene solo «archivia»): oggi il trigger `vieta_cancellazione` blocca ogni cancellazione e le voci archiviate sono nascoste dagli elenchi (si vedono solo con «archiviati»). Idea: pulsante «Elimina» solo per il titolare, visibile solo se la voce non è collegata a niente (es. articolo doppio mai usato in un preventivo, cliente creato per sbaglio). Servirà una nuova migrazione: una funzione che controlla i collegamenti e cancella, eccezione mirata a `vieta_cancellazione`, e una riga nel registro delle modifiche
 
 ### Da fare più avanti (Anagrafiche)
 - Verificare con il commercialista: reverse charge (TD16–TD19), dichiarazioni d'intento, elenco codici IVA/nature, condizioni di pagamento a rate
