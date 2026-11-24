@@ -205,12 +205,12 @@ export async function salvaAzienda(_prima: StatoAzienda, dati: FormData): Promis
   };
 
   const supabase = await creaClientServer();
+  // Dalla 0009 (multi-azienda) la riga dell'azienda esiste sempre e il titolare
+  // può solo modificarla: le aziende nuove si creano con crea_azienda() dal SQL Editor.
   const id = testo(dati, "id");
-  const { data, error } = id
-    ? await supabase.from("azienda").update(record).eq("id", id).select("id")
-    : await supabase.from("azienda").insert(record).select("id");
+  if (!id) return sbaglio("Dati dell'azienda non trovati: ricarica la pagina.");
+  const { data, error } = await supabase.from("azienda").update(record).eq("id", id).select("id");
   if (error) {
-    if (error.code === "23505") return sbaglio("I dati dell'azienda esistono già: ricarica la pagina.");
     if (error.code === "23514") return sbaglio("Controlla i dati: un campo non è nel formato giusto (email, IBAN, nazione o logo).");
     return sbaglio(spiegaErrore(error));
   }

@@ -21,11 +21,16 @@ export const leggiUtente = cache(async (): Promise<UtenteCorrente | null> => {
   const utente = auth.user;
   if (!utente) return null;
 
-  const { data: profilo } = await supabase
-    .from("profili")
-    .select("email, nome_visualizzato, ruolo, attivo")
-    .eq("id", utente.id)
-    .maybeSingle();
+  // ruolo_corrente() del database è vuoto se l'account è disattivato
+  // o se è spenta la sua azienda (multi-azienda, migrazione 0009).
+  const [{ data: profilo }, { data: ruoloAttivo }] = await Promise.all([
+    supabase
+      .from("profili")
+      .select("email, nome_visualizzato, ruolo, attivo")
+      .eq("id", utente.id)
+      .maybeSingle(),
+    supabase.rpc("ruolo_corrente"),
+  ]);
 
   // Account senza profilo (non dovrebbe succedere): lo trattiamo come non attivo.
   if (!profilo || !eRuolo(profilo.ruolo)) {
@@ -37,7 +42,7 @@ export const leggiUtente = cache(async (): Promise<UtenteCorrente | null> => {
     email: profilo.email,
     nome: profilo.nome_visualizzato || profilo.email,
     ruolo: profilo.ruolo,
-    attivo: profilo.attivo,
+    attivo: profilo.attivo && ruoloAttivo != null,
   };
 });
 

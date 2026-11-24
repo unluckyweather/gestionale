@@ -2,7 +2,7 @@
 
 > **Documento di riferimento condiviso.** Ogni chat del progetto lo legge prima di toccare il database.
 > Chi aggiunge o modifica una tabella aggiorna questo file nello stesso momento.
-> Stato: **v0.9** (23/11/2026) – Fondamenta in `0001_fondamenta.sql` e Anagrafiche in `0002_anagrafiche.sql` (entrambe applicate su `gestionale-dev`). Preventivi in `0003_preventivi.sql` (applicata su `gestionale-dev`). Materiali a lastra in `0004_lastre.sql`, stampa in `0005_stampa.sql` (entrambe applicate su `gestionale-dev`). Categorie merceologiche dei materiali in `0006_categorie_merceologiche.sql` (applicata su `gestionale-dev`). Magazzino e ordini d'acquisto in `0007_magazzino_ordini.sql` (applicata su `gestionale-dev` il 23/11); inventario anche per gli operai in `0008_inventario_operai.sql` (applicata su `gestionale-dev` il 23/11). Le altre sezioni sono bozza.
+> Stato: **v1.0** (24/11/2026) – **Multi-azienda in `0009_multi_azienda.sql` (applicata su `gestionale-dev` il 24/11, sezione 0)**. Fondamenta in `0001_fondamenta.sql` e Anagrafiche in `0002_anagrafiche.sql` (entrambe applicate su `gestionale-dev`). Preventivi in `0003_preventivi.sql` (applicata su `gestionale-dev`). Materiali a lastra in `0004_lastre.sql`, stampa in `0005_stampa.sql` (entrambe applicate su `gestionale-dev`). Categorie merceologiche dei materiali in `0006_categorie_merceologiche.sql` (applicata su `gestionale-dev`). Magazzino e ordini d'acquisto in `0007_magazzino_ordini.sql` (applicata su `gestionale-dev` il 23/11); inventario anche per gli operai in `0008_inventario_operai.sql` (applicata su `gestionale-dev` il 23/11). Le altre sezioni sono bozza.
 > Mockup confermato (19/11): https://claude.ai/artifact/B5LEbqMxrBA2FJXqQu8U4s — preventivi a fasi + scheda cliente/fornitore "proposta v3".
 
 ## Regole comuni a tutte le tabelle
@@ -27,6 +27,67 @@ Nomi dei trigger: `a_…` protezioni, `b_aggiornamento`, `z_registro` (Postgres 
 
 ---
 
+## 0. Predisposizione multi-azienda — ✅ applicata in `0009_multi_azienda.sql` (su `gestionale-dev` il 24/11)
+
+**Perché:** lo stesso gestionale potrà servire più aziende clienti, ognuna con i suoi dati, nello stesso database. Ogni riga "sa" di quale azienda è (`azienda_id`) e il database mostra a ogni utente **solo le righe della sua azienda**. Per ora esiste una sola azienda: per chi usa l'app non cambia niente.
+
+**Decisioni (approvate il 24/11):**
+- `azienda` smette di essere "una sola riga" e diventa **l'elenco delle aziende** (tolti la colonna `unica` e il vincolo `azienda_una_sola`). Ogni utente appartiene a **una** azienda (`profili.azienda_id`).
+- Le aziende nuove si creano **solo dal SQL Editor** con `crea_azienda(…)`; dall'app il titolare modifica solo i dati della propria (niente più "inserimento" in Impostazioni).
+- `azienda.attivo = false` **spegne un'azienda**: i suoi utenti risultano non attivi (vedono «account non attivo»).
+
+### Funzioni nuove
+| funzione | a cosa serve |
+|---|---|
+| `azienda_corrente()` | `azienda_id` del profilo collegato; `null` se non collegato. `security definer`, si usa come `(select public.azienda_corrente())` |
+| `allinea_azienda()` | trigger `a0_azienda` (prima di tutti gli altri `a_…`): nelle righe figlie **copia** l'`azienda_id` dal padre se manca e **controlla** che padre e tabelle collegate (cliente, articolo, codice IVA, tariffa…) siano della **stessa azienda**, altrimenti errore. Vieta di cambiare `azienda_id` dopo la creazione |
+| `crea_azienda(p_ragione_sociale, p_email_titolare)` | crea l'azienda, le **copia i dati iniziali** (codici IVA, condizioni di pagamento, tariffe orarie d'esempio) e, se c'è l'email, sposta quell'utente nella nuova azienda come titolare attivo. Solo dal SQL Editor (non eseguibile dagli utenti dell'app) |
+
+`ruolo_corrente()` restituisce `null` anche quando l'azienda dell'utente è spenta.
+
+### `azienda_id` in tutte le tabelle con dati aziendali
+`uuid not null → azienda`, predefinito `azienda_corrente()` (l'app non lo deve mandare), con indice. Le righe esistenti ricevono l'id dell'azienda di oggi.
+
+| gruppo | tabelle | da dove prende l'azienda |
+|---|---|---|
+| Fondamenta | `profili`, `dipendenti`, `registro_modifiche` | profilo: assegnata alla creazione; registro: dalla riga registrata |
+| Tabelle "di base" | `codici_iva`, `condizioni_pagamento`, `banche_aziendali`, `categorie_merceologiche`, `tariffe_orarie`, `modelli_lavorazione`, `numeratori` | azienda dell'utente |
+| Anagrafiche | `soggetti`, `articoli` | azienda dell'utente (controllo su codici IVA, pagamento, banca, categoria, fornitore) |
+| figlie dei soggetti | `contatti_soggetto`, `sedi_soggetto`, `dichiarazioni_intento`, `fornitori_categorie` | dal soggetto |
+| Preventivi | `preventivi` | azienda dell'utente (controllo su cliente, modello, codice IVA) |
+| figlie | `fasi_preventivo` (dal preventivo o dal modello), `ore_fase` e `materiali_fase` (dalla fase; controllo su tariffa e articolo) | dal padre |
+| Magazzino | `ordini_acquisto` (controllo sul fornitore), `righe_ordine_acquisto` (dall'ordine; controllo sull'articolo), `movimenti_magazzino` (dall'articolo; controllo sulla riga d'ordine) | dal padre |
+
+### Regole RLS
+Ogni tabella sopra (e `azienda` con `id`) riceve **una regola in più, "restrittiva"**: `azienda_id = (select public.azienda_corrente())`, sia per leggere sia per scrivere. Postgres la mette **in "e"** con le regole per ruolo che esistono già: per vedere una riga serve il ruolo giusto **e** la stessa azienda. Le regole per ruolo non cambiano.
+- La vista **`magazzino`** (che non usa le regole RLS perché gli operai non leggono `articoli`) riceve il filtro `a.azienda_id = azienda_corrente()`. Le altre viste sono `security_invoker` e seguono già le regole.
+- Le funzioni `security definer` (`prossimo_numero`, `numera_*`, `registra_modifica`) lavorano sull'azienda della riga, mai su tutte.
+
+### Vincoli unici e numeratori per azienda
+- `numeratori`: chiave `azienda_id + documento + anno` → ogni azienda ha i suoi `1/26`, `2/26`… sia per i **preventivi** sia per gli **ordini d'acquisto** (e poi le commesse). `prossimo_numero(p_azienda_id, p_documento, p_anno)`.
+- `preventivi` e `ordini_acquisto`: `unique (azienda_id, anno, progressivo)`.
+- Unici "tra gli attivi" anche per azienda: nome di tariffe, modelli, banche; codice dei codici IVA; descrizione di condizioni di pagamento e categorie; P.IVA dei soggetti; protocollo delle dichiarazioni d'intento; codice degli articoli. (Due aziende possono avere lo stesso cliente o lo stesso codice articolo.)
+
+### Utenti
+- `al_nuovo_utente`: il nuovo profilo va **nell'azienda più vecchia** (oggi l'unica), disattivato e operaio come prima. Per un'altra azienda lo si sposta con `crea_azienda(…, email)` o dal SQL Editor.
+- `a_proteggi`: **nessuno cambia la propria azienda**, e dall'app nessuno cambia l'azienda di nessuno (solo dal SQL Editor).
+- `registro_modifiche.azienda_id`: il titolare vede solo lo storico della propria azienda.
+
+### File (Storage)
+Oggi l'app non usa Storage (il logo è dentro `azienda.logo`). Regola per quando servirà: ogni file sta sotto `<azienda_id>/…` e le regole del bucket permettono solo la cartella `azienda_corrente()`.
+
+### Regole per le tabelle nuove (da qui in poi)
+Ogni nuova tabella con dati aziendali ha: `azienda_id uuid not null default public.azienda_corrente() references public.azienda (id)`, un indice su `azienda_id`, la regola restrittiva `"<tabella>: stessa azienda"` e il trigger `a0_azienda` con i suoi collegamenti (es. `allinea_azienda('commessa_id:commesse')`). Vincoli unici e numeratori sempre con `azienda_id` davanti. Le viste non `security_invoker` filtrano `azienda_id = azienda_corrente()`.
+
+### Prove (24/11)
+- In locale con PGlite (0001→0009 con dati di prova, poi una seconda azienda): 97 controlli su 97.
+- Su `gestionale-dev`: backup nello schema `backup_prima_0009` (24 tabelle; si butta con `drop schema backup_prima_0009 cascade;`), migrazione applicata (dati, registro e numeri invariati). Seconda azienda «Azienda di prova B» con `crea_azienda` e un titolare di prova: con lo script `supabase/prove/test_isolamento_aziende.sql` B vede 0 righe di A in tutte le tabelle e viste, e 25 tentativi di modificare o collegare dati di A sono respinti; B ha il suo preventivo 1/26 e può avere un soggetto con la stessa P.IVA di A. Nell'app (titolare A): elenchi, Impostazioni (solo i propri account, salvataggio dati azienda), stampa e «Duplica» (19/26) funzionano. Poi utente e azienda di prova spenti (`attivo = false`).
+
+### Cosa resta uguale nell'app
+Le funzioni `salva_soggetto`, `salva_preventivo`, `salva_modello`, `salva_fasi`, `salva_ordine_acquisto`, `registra_arrivo` sono `security invoker`: le righe nuove prendono da sole l'azienda (valore predefinito o trigger). Si sistemano le ricerche interne dei trigger (es. codice IVA «22» dell'azienda giusta) e il salvataggio dei dati azienda in Impostazioni (solo modifica).
+
+---
+
 ## 1. Fondamenta (utenti e ruoli) — ✅ in `0001_fondamenta.sql`
 
 Enum `ruolo_utente`: `titolare`, `ufficio`, `contabilita`, `operaio`.
@@ -41,8 +102,8 @@ Enum `azione_registro`: `creazione`, `modifica`, `archiviazione`.
 | ruolo | ruolo_utente | predefinito `operaio` |
 | attivo | bool | predefinito **false**: il titolare attiva i nuovi account |
 
-> Il profilo nasce da solo quando si crea un utente su Supabase (trigger `al_nuovo_utente` su `auth.users`).
-> Nessuno può cambiare il **proprio** ruolo o disattivare il **proprio** account (trigger `a_proteggi`).
+> Il profilo nasce da solo quando si crea un utente su Supabase (trigger `al_nuovo_utente` su `auth.users`), dalla 0009 nell'azienda più vecchia; per un'altra azienda si usa `crea_azienda(…, email)`.
+> Nessuno può cambiare il **proprio** ruolo o disattivare il **proprio** account (trigger `a_proteggi`); dalla 0009 l'azienda di un utente non si cambia dall'app.
 > Il primo titolare si imposta una volta sola dal SQL Editor: `update profili set ruolo = 'titolare', attivo = true where email = '…';`
 
 ### `dipendenti` — anagrafica del personale
@@ -78,7 +139,7 @@ Enum `azione_registro`: `creazione`, `modifica`, `archiviazione`.
 ---
 
 ### `azienda` — i nostri dati (0005)
-Una sola riga (vincolo `azienda_una_sola`). `ragione_sociale` (obbligatoria), `indirizzo`, `civico`, `cap`, `comune`, `provincia`, `nazione` (predefinita `IT`), `partita_iva`, `codice_fiscale`, `telefono`, `email`, `pec`, `sito_web`, `iban`, `banca`, `rea`, `capitale_sociale`, `piede_documenti`, `logo` (immagine PNG/JPG/WebP/SVG come data URL, al massimo ~300 KB).
+Dalla 0009 è **l'elenco delle aziende** (sezione 0): ogni utente vede solo la propria; il titolare la modifica, le nuove si creano con `crea_azienda()`. `attivo = false` spegne l'azienda. `ragione_sociale` (obbligatoria), `indirizzo`, `civico`, `cap`, `comune`, `provincia`, `nazione` (predefinita `IT`), `partita_iva`, `codice_fiscale`, `telefono`, `email`, `pec`, `sito_web`, `iban`, `banca`, `rea`, `capitale_sociale`, `piede_documenti`, `logo` (immagine PNG/JPG/WebP/SVG come data URL, al massimo ~300 KB).
 Intestazione dei preventivi stampati; servirà anche alla fattura elettronica (cedente/prestatore).
 Permessi: leggono titolare, ufficio, contabilità; modifica solo il titolare (Impostazioni). Non si cancella. Trigger `a_normalizza`, `b_aggiornamento`, `vieta_cancellazione`, `z_registro`.
 
@@ -267,8 +328,8 @@ Enum nuovi: `tipo_tariffa` (`persona`, `macchina`, `posa`), `stato_preventivo` (
 | anno | smallint | |
 | ultimo | int | ultimo progressivo usato |
 
-> Chiave: `documento` + `anno`. Nessun utente la legge o la scrive: la aggiorna il trigger `a_numera` (funzione `prossimo_numero`) nello stesso salvataggio, così due persone nello stesso istante ricevono numeri diversi e un salvataggio fallito non "brucia" un numero.
-> Per partire da un altro numero (es. continuare da FileMaker), una volta dal SQL Editor: `insert into numeratori (documento, anno, ultimo) values ('preventivo', 2026, 113) on conflict (documento, anno) do update set ultimo = excluded.ultimo;`
+> Chiave: `azienda_id` + `documento` + `anno` (dalla 0009: ogni azienda ha i suoi numeri). Nessun utente la legge o la scrive: la aggiorna il trigger `a_numera` (funzione `prossimo_numero`) nello stesso salvataggio, così due persone nello stesso istante ricevono numeri diversi e un salvataggio fallito non "brucia" un numero.
+> Per partire da un altro numero (es. continuare da FileMaker), una volta dal SQL Editor: `insert into numeratori (azienda_id, documento, anno, ultimo) values ('<id azienda>', 'preventivo', 2026, 113) on conflict (azienda_id, documento, anno) do update set ultimo = excluded.ultimo;`
 
 ### `tariffe_orarie` — nuova
 | campo | tipo | note |
@@ -478,7 +539,7 @@ Enum nuovi: `stato_ordine_acquisto` (`bozza`, `inviato`, `ricevuto_parziale`, `r
 > Dopo la creazione si cambiano solo `note` e `attivo` (trigger `a_normalizza`). Trigger `y_stato_ordine`: dopo un arrivo, o il suo annullamento, ricalcola lo stato dell'ordine (`aggiorna_stato_ordine`): tutto arrivato → `ricevuto`, qualcosa → `ricevuto_parziale`, niente → `inviato`; un ordine annullato non cambia.
 
 ### Viste
-- **`magazzino`**: per ogni articolo `codice`, `descrizione`, `categoria`, `unita` (di magazzino), `giacenza`, `in_arrivo` (ordinato in ordini inviati/ricevuti in parte e non ancora arrivato), `scorta_minima`, `sotto_scorta`, `ultimo_movimento`, `attivo`. **Senza costi.** Non è `security_invoker` (gli operai non leggono `articoli`): la leggono tutti gli utenti attivi, grazie al filtro sul ruolo dentro la vista.
+- **`magazzino`**: per ogni articolo `codice`, `descrizione`, `categoria`, `unita` (di magazzino), `giacenza`, `in_arrivo` (ordinato in ordini inviati/ricevuti in parte e non ancora arrivato), `scorta_minima`, `sotto_scorta`, `ultimo_movimento`, `attivo`. **Senza costi.** Non è `security_invoker` (gli operai non leggono `articoli`): la leggono tutti gli utenti attivi, grazie al filtro sul ruolo dentro la vista (dalla 0009 anche sull'azienda).
 - **`righe_ordine_riepilogo`** (`security_invoker`): per riga `quantita`, `arrivato`, `da_ricevere`, `importo`.
 - **`ordini_acquisto_riepilogo`** (`security_invoker`): per ordine `righe`, `imponibile` (IVA esclusa), `da_ricevere`.
 
