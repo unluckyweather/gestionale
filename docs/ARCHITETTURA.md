@@ -7,7 +7,7 @@
 - **Supabase**: database PostgreSQL, login, tempo reale (server in UE, Francoforte)
 - **Vercel**: hosting (regione Francoforte)
 - **GitHub**: repository privato `gestionale`
-- Codice sul Mac in `Documenti/Sviluppo/gestionale`
+- Codice sul Mac in `~/Sviluppo/gestionale` (cartella Inizio → Sviluppo → gestionale)
 
 ## Mockup di riferimento
 **Confermato il 19/11/2026:** "Mockup gestionale – preventivi a fasi" → https://claude.ai/artifact/B5LEbqMxrBA2FJXqQu8U4s
