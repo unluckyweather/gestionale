@@ -155,10 +155,10 @@ export default async function SchedaProgramma({ p, titolare }: { p: ParametriPro
             <p key={a.id}>
               {titolare ? (
                 <Link href={link({ modifica: a.id })} className="font-semibold hover:underline">
-                  {a.persona ?? "Da assegnare"} · {a.titolo}
+                  {a.persona ?? "Da assegnare"} · {a.commessa_numero ? `${a.commessa_numero} ${a.cliente ?? ""} · ` : ""}{a.titolo}
                 </Link>
               ) : (
-                <strong>{a.persona ?? "Da assegnare"} · {a.titolo}</strong>
+                <strong>{a.persona ?? "Da assegnare"} · {a.commessa_numero ? `${a.commessa_numero} ${a.cliente ?? ""} · ` : ""}{a.titolo}</strong>
               )}{" "}
               ({ora(a.dalle)}–{ora(a.alle)}): {avvisi(a).join(", ")}.
             </p>
@@ -224,8 +224,8 @@ function Griglia({
     da: min(a.dalle),
     a: min(a.alle),
     tipo: "lavoro",
-    titolo: `${a.commessa_numero ? `${a.commessa_numero} · ` : ""}${a.titolo}`,
-    sotto,
+    titolo: a.commessa_numero ? `${a.commessa_numero} · ${a.cliente ?? ""}` : "Interno",
+    sotto: [a.titolo, sotto].filter(Boolean).join(" · "),
     a_id: a.id,
     stile: stileLavoro(a, a.id === selezionata),
   });
@@ -440,10 +440,12 @@ function DaPianificare({
                 aria-current={scelto ? "true" : undefined}
                 className={`flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg p-3 text-sm ${scelto ? "border-2 border-blue-600 bg-blue-50" : "border border-slate-200 hover:bg-slate-50"}`}
               >
-                <strong className="min-w-48 flex-1">
-                  {l.commessa ? `${l.commessa.numero} · ` : "Interno · "}
-                  {l.titolo}
-                </strong>
+                <span className="flex min-w-48 flex-1 flex-col">
+                  <span className="font-semibold">
+                    {l.commessa ? `${l.commessa.numero} · ${l.commessa.cliente}` : "Lavoro interno"}
+                  </span>
+                  <span className="text-slate-700">{l.titolo}</span>
+                </span>
                 <span className="text-slate-700">{d.macchine.find((m) => m.id === l.macchina_id)?.nome ?? "macchina da decidere"}</span>
                 <span className="text-slate-700">
                   {l.da_programmare === null ? "ore non indicate" : `${oreTesto(l.da_programmare)}${l.ore_programmate ? ` (di ${oreTesto(l.ore_previste)})` : ""}`}
@@ -454,7 +456,6 @@ function DaPianificare({
                   </span>
                 )}
                 {(l.urgente || l.commessa?.urgente) && <EtichettaUrgente />}
-                {l.commessa && <span className="basis-full text-xs text-slate-500">{l.commessa.cliente}</span>}
               </Link>
             </li>
           );
@@ -560,7 +561,7 @@ function ChiPuoFarlo({
     <div className={`${riquadro} flex flex-col gap-3 p-4`}>
       <h2 className="font-semibold">Chi può farlo</h2>
       <p className="text-sm text-slate-600">
-        <strong>{lavoro.commessa ? `${lavoro.commessa.numero} · ` : ""}{lavoro.titolo}</strong> · {macchina?.nome ?? "macchina da decidere"} ·{" "}
+        <strong>{lavoro.commessa ? `${lavoro.commessa.numero} · ${lavoro.commessa.cliente} · ` : "Interno · "}{lavoro.titolo}</strong> · {macchina?.nome ?? "macchina da decidere"} ·{" "}
         {lavoro.da_programmare === null ? "ore non indicate" : `${oreTesto(lavoro.da_programmare)} da programmare`}
       </p>
       {macchina && conCompetenza.length === 0 && (

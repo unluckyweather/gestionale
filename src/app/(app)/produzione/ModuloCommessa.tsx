@@ -1,6 +1,7 @@
 "use client";
 // Modulo della commessa (titolare e ufficio): dati della commessa e lavori.
 // Si salva tutto insieme con salva_commessa (se una parte non va, non si salva niente).
+import Link from "next/link";
 import { useActionState, useEffect, useMemo, useRef, useState } from "react";
 import { campo, etichetta, pulsante, pulsanteSecondario, riquadro } from "../anagrafiche/stile";
 import { useConferma } from "../preventivi/Conferma";
@@ -43,6 +44,8 @@ type Props = {
   sedi: Sede[];
   macchine: MacchinaScelta[];
   oggi: string;
+  /** il titolare vede «Pianifica →» sui lavori ancora da mettere nel programma */
+  pianifica?: boolean;
 };
 
 /** Riga del modulo: chiave per React e, per i lavori già salvati, stato e programma. */
@@ -342,6 +345,14 @@ export default function ModuloCommessa(props: Props) {
                   <p className="flex flex-wrap items-center gap-2 text-xs text-slate-600">
                     <EtichettaStatoLavoro stato={r.info.stato} />
                     {programmato(r.info)}
+                    {props.pianifica && daProgrammare(r.info) && (
+                      <Link
+                        href={`/produzione?scheda=programma&lavoro=${r.info.id}`}
+                        className="ml-auto rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-700"
+                      >
+                        Pianifica →
+                      </Link>
+                    )}
                   </p>
                 ) : (
                   <p className="text-xs text-slate-500">
@@ -379,4 +390,11 @@ export default function ModuloCommessa(props: Props) {
     </form>
     </>
   );
+}
+
+/** Un lavoro non finito con ore ancora da mettere nel programma (o senza ore e mai programmato). */
+function daProgrammare(l: LavoroVisto): boolean {
+  if (l.stato === "finito") return false;
+  if (l.ore_previste === null) return l.ore_programmate === 0;
+  return l.ore_programmate < Number(l.ore_previste);
 }

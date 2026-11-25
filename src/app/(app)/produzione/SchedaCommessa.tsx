@@ -23,7 +23,7 @@ import {
 import MaterialiCommessa from "./MaterialiCommessa";
 import ModuloCommessa, { type CommessaLetta, type LavoroLetto, type MacchinaScelta } from "./ModuloCommessa";
 
-type Props = { id: string; preventivo?: string; modificabile: boolean; materiali: boolean; ok?: string; errore?: string };
+type Props = { id: string; preventivo?: string; modificabile: boolean; materiali: boolean; pianifica: boolean; ok?: string; errore?: string };
 
 type Elenco = {
   cliente: string;
@@ -35,7 +35,7 @@ type Elenco = {
   avanzamento: number;
 };
 
-export default async function SchedaCommessa({ id, preventivo, modificabile, materiali, ok, errore }: Props) {
+export default async function SchedaCommessa({ id, preventivo, modificabile, materiali, pianifica, ok, errore }: Props) {
   const nuova = id === "nuova";
   if (nuova && !modificabile) return <Avviso testo="Non hai i permessi per creare commesse." />;
   if (!nuova && !/^[0-9a-f-]{36}$/i.test(id)) return <Avviso testo="Commessa non trovata." />;
@@ -223,6 +223,7 @@ export default async function SchedaCommessa({ id, preventivo, modificabile, mat
         sedi={sedi}
         macchine={macchine}
         oggi={oggiIt()}
+        pianifica={pianifica}
       />
       {commessa && materiali && (
         <MaterialiCommessa commessaId={commessa.id} preventivoId={commessa.preventivo_id} modificabile={modificabile} attiva={commessa.attivo} />

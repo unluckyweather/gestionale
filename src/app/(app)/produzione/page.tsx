@@ -30,7 +30,7 @@ export default async function Produzione({ searchParams }: { searchParams: Promi
     return <SchedaMioProgramma p={p} titolare={io.ruolo === "titolare"} />;
   }
   if (p.id) {
-    return <SchedaCommessa id={p.id} preventivo={p.preventivo} modificabile={modificabile} materiali={io.ruolo !== "operaio"} ok={p.ok} errore={p.errore} />;
+    return <SchedaCommessa id={p.id} preventivo={p.preventivo} modificabile={modificabile} materiali={io.ruolo !== "operaio"} pianifica={io.ruolo === "titolare"} ok={p.ok} errore={p.errore} />;
   }
   return <ElencoCommesse p={p} modificabile={modificabile} />;
 }
