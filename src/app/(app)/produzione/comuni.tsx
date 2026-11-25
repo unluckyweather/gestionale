@@ -83,10 +83,11 @@ export function programmato(l: { ore_programmate: number; primo_giorno: string |
   return `nel programma ${quando} (${oreTesto(l.ore_programmate)})`;
 }
 
-/** Schede "Commesse · Programma del giorno". */
-export function SchedeProduzione({ attiva }: { attiva: "commesse" | "programma" }) {
+/** Schede "Il mio programma · Commesse · Programma del giorno". */
+export function SchedeProduzione({ attiva }: { attiva: "commesse" | "programma" | "mio" }) {
   const schede = [
-    { chiave: "commesse", etichetta: "Commesse", href: indirizzo({}) },
+    { chiave: "mio", etichetta: "Il mio programma", href: indirizzo({ scheda: "mio" }) },
+    { chiave: "commesse", etichetta: "Commesse", href: indirizzo({ scheda: "commesse" }) },
     { chiave: "programma", etichetta: "Programma del giorno", href: indirizzo({ scheda: "programma" }) },
   ];
   return (

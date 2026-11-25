@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import type { PostgrestError } from "@supabase/supabase-js";
-import { richiediRuolo } from "@/lib/utente";
+import { richiediRuolo, richiediUtente } from "@/lib/utente";
 import { creaClientServer } from "@/lib/supabase/server";
 import { minuti } from "@/lib/produzione";
 
@@ -77,6 +77,39 @@ export async function salvaAssegnazione(dati: FormData) {
   // si resta sul giorno dell'assegnazione (anche se è stata spostata a un altro giorno)
   dati.set("torna_giorno", giorno);
   torna(dati, id ? "Programma aggiornato." : "Lavoro messo nel programma.");
+}
+
+/**
+ * «Inizia» / «Finito» / «Riapri» da «Il mio programma».
+ * Gli operai possono cambiare solo lo stato dei lavori che hanno nel programma
+ * (lo impongono la regola RLS e il trigger della 0010); titolare e ufficio tutti.
+ * Lo stato della commessa si aggiorna da solo.
+ */
+export async function cambiaStatoLavoro(dati: FormData) {
+  await richiediUtente();
+  const lavoro = testo(dati, "lavoro_id");
+  const stato = testo(dati, "stato");
+  const p = new URLSearchParams({ scheda: "mio" });
+  const giorno = testo(dati, "giorno");
+  if (DATA.test(giorno)) p.set("giorno", giorno);
+  const persona = testo(dati, "persona");
+  if (UUID.test(persona)) p.set("persona", persona);
+  const vai = (chiave: "ok" | "errore", messaggio: string): never => {
+    p.set(chiave, messaggio);
+    redirect(`/produzione?${p.toString()}`);
+  };
+
+  if (!UUID.test(lavoro)) vai("errore", "Lavoro non valido.");
+  if (!["da_fare", "in_corso", "finito"].includes(stato)) vai("errore", "Stato non valido.");
+
+  const supabase = await creaClientServer();
+  const { data, error } = await supabase.from("lavori").update({ stato }).eq("id", lavoro).select("titolo");
+  if (error) vai("errore", spiega(error));
+  if (!data?.length) vai("errore", "Puoi segnare solo i lavori che hai nel programma.");
+
+  revalidatePath("/produzione");
+  const titolo = String(data![0].titolo);
+  vai("ok", stato === "finito" ? `«${titolo}» segnato come finito.` : stato === "in_corso" ? `«${titolo}» iniziato.` : `«${titolo}» riportato a da fare.`);
 }
 
 /** Lavoro interno, senza commessa (manutenzione, pulizia, prove…): poi si mette nel programma. */
