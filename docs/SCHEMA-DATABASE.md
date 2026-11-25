@@ -2,7 +2,7 @@
 
 > **Documento di riferimento condiviso.** Ogni chat del progetto lo legge prima di toccare il database.
 > Chi aggiunge o modifica una tabella aggiorna questo file nello stesso momento.
-> Stato: **v1.1** (25/11/2026) – **Produzione in `0010_produzione.sql` (applicata su `gestionale-dev` il 25/11, sezione 4)**. Multi-azienda in `0009_multi_azienda.sql` (applicata su `gestionale-dev` il 24/11, sezione 0). Fondamenta in `0001_fondamenta.sql` e Anagrafiche in `0002_anagrafiche.sql` (entrambe applicate su `gestionale-dev`). Preventivi in `0003_preventivi.sql` (applicata su `gestionale-dev`). Materiali a lastra in `0004_lastre.sql`, stampa in `0005_stampa.sql` (entrambe applicate su `gestionale-dev`). Categorie merceologiche dei materiali in `0006_categorie_merceologiche.sql` (applicata su `gestionale-dev`). Magazzino e ordini d'acquisto in `0007_magazzino_ordini.sql` (applicata su `gestionale-dev` il 23/11); inventario anche per gli operai in `0008_inventario_operai.sql` (applicata su `gestionale-dev` il 23/11). Le altre sezioni sono bozza.
+> Stato: **v1.2** (25/11/2026) – **Scarico del magazzino dalle commesse in `0011_scarico_commesse.sql` (applicata su `gestionale-dev` il 25/11, sezioni 4 e 6b)**. Produzione in `0010_produzione.sql` (applicata su `gestionale-dev` il 25/11, sezione 4). Multi-azienda in `0009_multi_azienda.sql` (applicata su `gestionale-dev` il 24/11, sezione 0). Fondamenta in `0001_fondamenta.sql` e Anagrafiche in `0002_anagrafiche.sql` (entrambe applicate su `gestionale-dev`). Preventivi in `0003_preventivi.sql` (applicata su `gestionale-dev`). Materiali a lastra in `0004_lastre.sql`, stampa in `0005_stampa.sql` (entrambe applicate su `gestionale-dev`). Categorie merceologiche dei materiali in `0006_categorie_merceologiche.sql` (applicata su `gestionale-dev`). Magazzino e ordini d'acquisto in `0007_magazzino_ordini.sql` (applicata su `gestionale-dev` il 23/11); inventario anche per gli operai in `0008_inventario_operai.sql` (applicata su `gestionale-dev` il 23/11). Le altre sezioni sono bozza.
 > Mockup confermato (19/11): https://claude.ai/artifact/B5LEbqMxrBA2FJXqQu8U4s — preventivi a fasi + scheda cliente/fornitore "proposta v3".
 
 ## Regole comuni a tutte le tabelle
@@ -530,7 +530,7 @@ Dati iniziali (nell'azienda più vecchia): Stampante UV piana, Stampante UV RTR 
 ### Viste
 Tutte senza prezzi. Le prime quattro **non** sono `security_invoker` (mostrano agli operai dati di tabelle che non leggono): filtrano a mano ruolo attivo e azienda.
 - **`programma`**: assegnazioni attive con ore, lavoro (titolo, stato), commessa (numero, descrizione, consegna), `cliente`, `urgente` (lavoro o commessa), macchina, persona, `mio` (è di chi legge), `luogo_posa` (solo postazioni fuori sede: sede della commessa, altrimenti sede legale del cliente) e gli avvisi `senza_persona`, `senza_competenza`, `persona_assente`, `macchina_ferma`, `fuori_orario` (non sta dentro una fascia dell'orario della persona), e le informazioni `persona_su_piu_lavori`, `macchina_su_piu_lavori`.
-- **`commesse_elenco`**: commesse con `cliente`, `luogo`, `lavori`, `lavori_finiti`, `ore_previste`, `ore_finite`, `avanzamento` (% sulle ore, o sul numero di lavori se mancano le ore). **Difetto noto (25/11):** se nessun lavoro è finito `avanzamento` esce vuoto invece di 0 (manca un `coalesce` su `ore_finite`); l'app lo tratta come 0. Da correggere nella prossima migrazione.
+- **`commesse_elenco`**: commesse con `cliente`, `luogo`, `lavori`, `lavori_finiti`, `ore_previste`, `ore_finite`, `avanzamento` (% sulle ore, o sul numero di lavori se mancano le ore). Nella 0010 `avanzamento` usciva vuoto se nessun lavoro era finito: corretto nella **0011** (ora 0).
 - **`dipendenti_elenco`**: `id`, `nome`, `cognome`, `nome_completo`, `attivo`, `io`.
 - **`assenze_elenco`**: assenze attive di tutti con `motivo` = tipo, ma «assente» al posto di «malattia» per chi non è titolare né la persona stessa; `note` solo per loro.
 - **`lavori_riepilogo`** (`security_invoker`): per lavoro `ore_previste`, `ore_programmate`, `ore_da_programmare`, `primo_giorno`, `ultimo_giorno`.
@@ -545,7 +545,7 @@ Tutte senza prezzi. Le prime quattro **non** sono `security_invoker` (mostrano a
 | viste programma, commesse_elenco, dipendenti_elenco, assenze_elenco | sì | sì | sì | sì |
 
 ### Prove (25/11)
-In locale con PGlite (0001→0010, dati di prova, poi una seconda azienda): **71 controlli su 71**. Dati iniziali (9 macchine, orario), competenze e orario part-time; «Converti in commessa» con lo stesso numero (1/26), seconda commessa dallo stesso preventivo rifiutata, commessa a mano 3/26 e preventivo successivo 4/26; fase di un altro preventivo, fornitore e sede di un altro cliente rifiutati; avvisi del programma (assente, macchina ferma, fuori orario anche part-time, senza competenza, senza persona, più lavori insieme); operaio: vede tutto il programma con il cliente, non legge soggetti/preventivi, cambia solo lo stato dei propri lavori; malattia «assente» per ufficio e operai; stato della commessa automatico; macchine rinominate, trasformate in postazione, archiviate (bloccate se hanno lavori nel programma da oggi in poi) e riaggiunte con lo stesso nome; permessi dei 4 ruoli, utenti non collegati, seconda azienda isolata (con il suo 1/26).
+In locale con PGlite (0001→0010, dati di prova, poi una seconda azienda): **71 controlli su 71**; con la **0011** altri 14 (scarico e rientro, giacenze, `materiali_commessa`, operai e contabilità respinti, rettifica con commessa vietata, commessa del movimento fissa, annullamento, commessa archiviata, seconda azienda, avanzamento 0): **85 su 85**. Dati iniziali (9 macchine, orario), competenze e orario part-time; «Converti in commessa» con lo stesso numero (1/26), seconda commessa dallo stesso preventivo rifiutata, commessa a mano 3/26 e preventivo successivo 4/26; fase di un altro preventivo, fornitore e sede di un altro cliente rifiutati; avvisi del programma (assente, macchina ferma, fuori orario anche part-time, senza competenza, senza persona, più lavori insieme); operaio: vede tutto il programma con il cliente, non legge soggetti/preventivi, cambia solo lo stato dei propri lavori; malattia «assente» per ufficio e operai; stato della commessa automatico; macchine rinominate, trasformate in postazione, archiviate (bloccate se hanno lavori nel programma da oggi in poi) e riaggiunte con lo stesso nome; permessi dei 4 ruoli, utenti non collegati, seconda azienda isolata (con il suo 1/26).
 
 > Le **timbrature** potranno avere `commessa_id` o `lavoro_id` per le ore reali (chat Timbrature). Lo **scarico del magazzino** dalle commesse è il passo 7 (colonna `movimenti_magazzino.commessa_id`, nuova migrazione).
 
@@ -579,7 +579,7 @@ Richiesta del datore di lavoro dopo le prove del 23/11: dall'articolo si crea un
 - La giacenza **non si scrive a mano**: è la somma dei **movimenti** (carico +, scarico −, rettifica ±). Un movimento sbagliato non si modifica: si archivia e se ne registra uno nuovo. Così resta lo storico.
 - **Unità di magazzino**: articolo a lastra → **lastre intere**; in bobina → **bobine intere**; gli altri → la loro unità di misura. Funzione `unita_magazzino(articolo)`.
 - **Sotto zero si può andare**: è un avviso, non un blocco (il materiale può esserci fisicamente senza essere stato registrato).
-- Lo scarico dalle commesse si registra **quando si conferma il materiale usato davvero** (quantità proposte dal preventivo, modificabili); prima risulta "impegnato". Si fa con la sezione Produzione (colonna `movimenti_magazzino.commessa_id` da aggiungere allora).
+- Lo scarico dalle commesse si registra **quando si conferma il materiale usato davvero** (quantità proposte dal preventivo, modificabili). Fatto con la **0011** (`movimenti_magazzino.commessa_id`, `scarica_materiali`); l'«impegnato» (previsto e non ancora scaricato) per ora si vede solo nella pagina della commessa, non nella giacenza.
 - **Gli operai registrano carichi, scarichi e inventari** (rettifiche: permesse con la 0008, decisione del 23/11 dopo le prove: di solito è un operaio a contare il magazzino); non arrivi d'ordine né annullamenti. Vedono le giacenze, ma **mai i costi**.
 - Le righe degli ordini sono **solo articoli del catalogo**, così ogni arrivo finisce nella giacenza giusta.
 
@@ -620,6 +620,7 @@ Enum nuovi: `stato_ordine_acquisto` (`bozza`, `inviato`, `ricevuto_parziale`, `r
 | tipo | tipo_movimento | |
 | quantita | numeric(12,3) | **con il segno**: carico > 0, scarico < 0, rettifica ≠ 0 |
 | riga_ordine_id | uuid → righe_ordine_acquisto | solo carichi da un ordine (l'articolo lo copia il database dalla riga) |
+| commessa_id | uuid → commesse | (0011) solo `scarico` (materiale usato) o `carico` (materiale avanzato che torna); mai insieme a una riga d'ordine; non cambia dopo la creazione; non su commesse archiviate |
 | note | text | |
 | attivo | bool | `false` = movimento annullato |
 
@@ -633,12 +634,14 @@ Enum nuovi: `stato_ordine_acquisto` (`bozza`, `inviato`, `ricevuto_parziale`, `r
 ### Funzioni
 - **`salva_ordine_acquisto(p_id, p_ordine, p_righe)`**: come `salva_preventivo` (tutto o niente; righe con `id` aggiornate, senza nuove, mancanti archiviate). Lo stato si cambia con un update. Restituisce l'id.
 - **`registra_arrivo(p_ordine_id, p_righe, p_data, p_note)`**: `p_righe` = `[{ riga_id, quantita }]`; crea i carichi (righe a 0 ignorate, si può ricevere più dell'ordinato). Restituisce quante righe ha registrato.
+- **`scarica_materiali(p_commessa_id, p_righe, p_data, p_note)`** (0011): `p_righe` = `[{ articolo_id, quantita }]` nell'unità di magazzino; quantità > 0 → scarico, < 0 → materiale avanzato che torna (carico), 0 ignorate; nota predefinita «commessa 3/26». Tutto o niente, `security invoker`. Restituisce quante righe ha registrato.
+- Vista **`materiali_commessa`** (0011, `security_invoker`): per commessa e articolo `usato` (scarichi meno rientri), `movimenti`, `ultimo`.
 
 ### Permessi Magazzino
 | | Titolare | Ufficio | Contabilità | Operaio |
 |---|---|---|---|---|
 | ordini_acquisto, righe | lettura, inserimento, modifica | lettura, inserimento, modifica | lettura | — |
-| movimenti_magazzino | lettura, tutti i tipi, archiviazione | lettura, tutti i tipi, archiviazione | lettura | lettura; inserimento di `carico`/`scarico`/`rettifica` senza ordine (0008) |
+| movimenti_magazzino | lettura, tutti i tipi, archiviazione | lettura, tutti i tipi, archiviazione | lettura | lettura; inserimento di `carico`/`scarico`/`rettifica` senza ordine (0008) e senza commessa (0011) |
 | vista magazzino | sì | sì | sì | sì (senza costi) |
 
 Tutte le tabelle hanno `attivo`, i campi `creato_*`/`aggiornato_*`, i trigger `b_aggiornamento`, `vieta_cancellazione`, `z_registro`.

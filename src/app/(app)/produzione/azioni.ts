@@ -165,3 +165,51 @@ export async function archiviaCommessa(dati: FormData) {
   revalidatePath("/preventivi");
   torna(id, attivo ? "Commessa ripristinata." : "Commessa archiviata.");
 }
+
+// ---------------------------------------------------------------------
+// Materiali usati per la commessa: scarichi dal magazzino (0011)
+// ---------------------------------------------------------------------
+export type EsitoMateriali = { errore?: string };
+
+export async function scaricaMateriali(_prima: EsitoMateriali, dati: FormData): Promise<EsitoMateriali> {
+  await richiediRuolo("titolare", "ufficio");
+  const id = testo(dati.get("commessa_id"));
+  const data = testo(dati.get("data"));
+  if (!idONull(id)) return { errore: "Commessa non valida." };
+  if (data && !DATA.test(data)) return { errore: "Data non valida." };
+
+  let righe: { articolo_id: string; quantita: number }[];
+  try {
+    const lette = JSON.parse(String(dati.get("righe") ?? "[]")) as { articolo_id: string; quantita: string; nome: string }[];
+    righe = lette
+      .map((r) => {
+        // il segno meno (anche «−») = materiale avanzato che torna in magazzino
+        const scritto = testo(r.quantita).replace(/^[−–]/, "-");
+        const meno = scritto.startsWith("-");
+        const q = numero(meno ? scritto.slice(1).trim() : scritto, r.nome || "Quantità", 3) ?? 0;
+        return { articolo_id: idONull(r.articolo_id) ?? "", quantita: meno ? -q : q, nome: r.nome };
+      })
+      .filter((r) => r.quantita !== 0)
+      .map((r) => {
+        if (!r.articolo_id) throw new ErroreDati(`${r.nome}: scegli l'articolo.`);
+        return { articolo_id: r.articolo_id, quantita: r.quantita };
+      });
+  } catch (e) {
+    if (e instanceof ErroreDati) return { errore: e.message };
+    return { errore: "Dati non leggibili. Ricarica la pagina." };
+  }
+  if (righe.length === 0) return { errore: "Indica almeno una quantità usata." };
+
+  const supabase = await creaClientServer();
+  const { data: quante, error } = await supabase.rpc("scarica_materiali", {
+    p_commessa_id: id,
+    p_righe: righe,
+    p_data: data || oggiIt(),
+    p_note: oNull(dati.get("note")),
+  });
+  if (error) return { errore: spiega(error) };
+
+  revalidatePath("/produzione");
+  revalidatePath("/magazzino");
+  redirect(indirizzo({ id, ok: `Registrati ${quante} ${quante === 1 ? "movimento" : "movimenti"} di magazzino.` }));
+}
