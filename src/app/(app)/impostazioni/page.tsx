@@ -18,7 +18,15 @@ const SCHEDE: { chiave: Chiave; etichetta: string }[] = [
   { chiave: "azienda", etichetta: "Dati dell'azienda" },
 ];
 
-type Profilo = { id: string; email: string; nome_visualizzato: string; ruolo: Ruolo; attivo: boolean };
+type Profilo = {
+  id: string;
+  email: string;
+  nome_visualizzato: string;
+  ruolo: Ruolo;
+  attivo: boolean;
+  creato_il: string;
+  aggiornato_il: string;
+};
 type Dipendente = {
   id: string;
   nome: string;
@@ -50,7 +58,7 @@ export default async function Impostazioni({
       ? vuoto
       : supabase
           .from("profili")
-          .select("id, email, nome_visualizzato, ruolo, attivo")
+          .select("id, email, nome_visualizzato, ruolo, attivo, creato_il, aggiornato_il")
           .order("attivo", { ascending: true })
           .order("email"),
     scheda.chiave !== "utenti"
@@ -71,9 +79,58 @@ export default async function Impostazioni({
     scheda.chiave !== "azienda" ? vuoto : supabase.from("azienda").select("*").maybeSingle(),
   ]);
   const profili = (risProfili.data ?? []) as Profilo[];
+  // Un account disattivato che non è mai stato modificato è "nuovo, da attivare" (appena creato su
+  // Supabase) e resta in vista; quelli disattivati di proposito finiscono in un elenco chiuso in fondo.
+  const nuovo = (p: Profilo) => !p.attivo && p.creato_il === p.aggiornato_il;
+  const inVista = profili.filter((p) => p.attivo || nuovo(p));
+  const disattivati = profili.filter((p) => !p.attivo && !nuovo(p));
   const dipendenti = (risDipendenti.data ?? []) as Dipendente[];
   const tariffe = (risTariffe.data ?? []) as Tariffa[];
   const azienda = (risAzienda.data ?? null) as Azienda | null;
+
+  const rigaAccount = (p: Profilo) => {
+    const sonoIo = p.id === io.id;
+    return (
+      <li key={p.id} className="p-4">
+        <form
+          action={salvaProfilo}
+          className="grid items-end gap-3 md:grid-cols-[1.4fr_1.2fr_1fr_auto_auto]"
+        >
+          <input type="hidden" name="id" value={p.id} />
+          <div className="text-sm">
+            <div className="truncate font-medium" title={p.email}>{p.email}</div>
+            <div className={`text-xs ${p.attivo ? "text-green-700" : "text-amber-700"}`}>
+              {p.attivo ? "Attivo" : nuovo(p) ? "Nuovo, da attivare" : "Disattivato"}
+              {sonoIo && " · sei tu"}
+            </div>
+          </div>
+          <label className={etichetta}>
+            Nome visualizzato
+            <input name="nome_visualizzato" defaultValue={p.nome_visualizzato} className={campo} />
+          </label>
+          <label className={etichetta}>
+            Ruolo
+            <select name="ruolo" defaultValue={p.ruolo} disabled={sonoIo} className={campo}>
+              {RUOLI.map((r) => (
+                <option key={r} value={r}>{ETICHETTE_RUOLO[r]}</option>
+              ))}
+            </select>
+          </label>
+          <label className="flex items-center gap-2 pb-2 text-sm">
+            <input
+              type="checkbox"
+              name="attivo"
+              defaultChecked={p.attivo}
+              disabled={sonoIo}
+              className="h-4 w-4"
+            />
+            Attivo
+          </label>
+          <button className={pulsante}>Salva</button>
+        </form>
+      </li>
+    );
+  };
 
   return (
     <div className={`flex flex-col gap-8 ${scheda.chiave === "macchine" ? "max-w-6xl" : "max-w-5xl"}`}>
@@ -121,50 +178,16 @@ export default async function Impostazioni({
           </p>
         </div>
         <ul className="divide-y divide-slate-100">
-          {profili.map((p) => {
-            const sonoIo = p.id === io.id;
-            return (
-              <li key={p.id} className="p-4">
-                <form
-                  action={salvaProfilo}
-                  className="grid items-end gap-3 md:grid-cols-[1.4fr_1.2fr_1fr_auto_auto]"
-                >
-                  <input type="hidden" name="id" value={p.id} />
-                  <div className="text-sm">
-                    <div className="truncate font-medium" title={p.email}>{p.email}</div>
-                    <div className={`text-xs ${p.attivo ? "text-green-700" : "text-amber-700"}`}>
-                      {p.attivo ? "Attivo" : "Da attivare / disattivato"}
-                      {sonoIo && " · sei tu"}
-                    </div>
-                  </div>
-                  <label className={etichetta}>
-                    Nome visualizzato
-                    <input name="nome_visualizzato" defaultValue={p.nome_visualizzato} className={campo} />
-                  </label>
-                  <label className={etichetta}>
-                    Ruolo
-                    <select name="ruolo" defaultValue={p.ruolo} disabled={sonoIo} className={campo}>
-                      {RUOLI.map((r) => (
-                        <option key={r} value={r}>{ETICHETTE_RUOLO[r]}</option>
-                      ))}
-                    </select>
-                  </label>
-                  <label className="flex items-center gap-2 pb-2 text-sm">
-                    <input
-                      type="checkbox"
-                      name="attivo"
-                      defaultChecked={p.attivo}
-                      disabled={sonoIo}
-                      className="h-4 w-4"
-                    />
-                    Attivo
-                  </label>
-                  <button className={pulsante}>Salva</button>
-                </form>
-              </li>
-            );
-          })}
+          {inVista.map(rigaAccount)}
         </ul>
+        {disattivati.length > 0 && (
+          <details className="border-t border-slate-200">
+            <summary className="cursor-pointer p-4 text-sm font-medium text-slate-600 hover:text-slate-900">
+              Account disattivati ({disattivati.length})
+            </summary>
+            <ul className="divide-y divide-slate-100 bg-slate-50">{disattivati.map(rigaAccount)}</ul>
+          </details>
+        )}
       </section>
 
       {/* ---------------- Dipendenti (stesso elenco della scheda Anagrafiche) ---------------- */}
