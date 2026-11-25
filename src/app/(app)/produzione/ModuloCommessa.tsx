@@ -2,10 +2,10 @@
 // Modulo della commessa (titolare e ufficio): dati della commessa e lavori.
 // Si salva tutto insieme con salva_commessa (se una parte non va, non si salva niente).
 import Link from "next/link";
-import { useActionState, useEffect, useMemo, useRef, useState } from "react";
+import { useActionState, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { campo, etichetta, pulsante, pulsanteSecondario, riquadro } from "../anagrafiche/stile";
 import { useConferma } from "../preventivi/Conferma";
-import { salvaCommessa, type CommessaModulo, type EsitoCommessa, type LavoroModulo } from "./azioni";
+import { riportaLavoroDaFare, salvaCommessa, type CommessaModulo, type EsitoCommessa, type LavoroModulo } from "./azioni";
 import { EtichettaStatoLavoro, oreTesto, programmato, type StatoLavoro } from "./comuni";
 
 export type CommessaLetta = {
@@ -64,6 +64,22 @@ export default function ModuloCommessa(props: Props) {
   const { commessa, preventivo, clienti, sedi, macchine } = props;
   const [esito, azione, inCorso] = useActionState<EsitoCommessa, FormData>(salvaCommessa, {});
   const { chiedi, finestra } = useConferma();
+  const [riportando, avviaRiporta] = useTransition();
+  const [erroreStato, setErroreStato] = useState<string | null>(null);
+
+  // «Riporta a da fare»: corregge una prova o un errore (lavoro iniziato o finito per sbaglio)
+  async function riportaDaFare(id: string, titolo: string) {
+    const testo = modificato
+      ? `Riportare «${titolo}» a «da fare»? Le modifiche non salvate alla commessa andranno perse.`
+      : `Riportare «${titolo}» a «da fare»? Si cancellano le ore di inizio e fine; se nessun lavoro è più iniziato né nel programma, la commessa torna «da pianificare».`;
+    if (!(await chiedi(testo, "Riporta a da fare"))) return;
+    setErroreStato(null);
+    salvando.current = true;
+    avviaRiporta(async () => {
+      const esito = await riportaLavoroDaFare(id);
+      if (esito?.errore) setErroreStato(esito.errore);
+    });
+  }
 
   const iniziale = useMemo(() => {
     const testata = {
@@ -345,6 +361,16 @@ export default function ModuloCommessa(props: Props) {
                   <p className="flex flex-wrap items-center gap-2 text-xs text-slate-600">
                     <EtichettaStatoLavoro stato={r.info.stato} />
                     {programmato(r.info)}
+                    {r.info.stato !== "da_fare" && (
+                      <button
+                        type="button"
+                        disabled={riportando}
+                        onClick={() => riportaDaFare(r.info!.id, r.info!.titolo)}
+                        className="font-semibold text-blue-700 hover:underline disabled:opacity-50"
+                      >
+                        Riporta a da fare
+                      </button>
+                    )}
                     {props.pianifica && daProgrammare(r.info) && (
                       <Link
                         href={`/produzione?scheda=programma&lavoro=${r.info.id}`}
@@ -380,6 +406,7 @@ export default function ModuloCommessa(props: Props) {
         </div>
       </section>
 
+      {erroreStato && <p role="alert" className="rounded-lg bg-red-50 px-4 py-3 text-sm text-red-800">{erroreStato}</p>}
       {esito.errore && <p role="alert" className="rounded-lg bg-red-50 px-4 py-3 text-sm text-red-800">{esito.errore}</p>}
       <div className="sticky bottom-0 flex flex-wrap items-center gap-3 border-t border-slate-200 bg-slate-50/95 py-3">
         <button disabled={inCorso || (!modificato && Boolean(commessa))} className={`${pulsante} disabled:opacity-50`}>

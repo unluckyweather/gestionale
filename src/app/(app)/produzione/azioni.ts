@@ -213,3 +213,27 @@ export async function scaricaMateriali(_prima: EsitoMateriali, dati: FormData): 
   revalidatePath("/magazzino");
   redirect(indirizzo({ id, ok: `Registrati ${quante} ${quante === 1 ? "movimento" : "movimenti"} di magazzino.` }));
 }
+
+// ---------------------------------------------------------------------
+// «Riporta a da fare» (titolare e ufficio): per correggere una prova o un
+// errore. Il database cancella le date di inizio e fine e ricalcola lo
+// stato della commessa (se niente è più iniziato né nel programma torna
+// «da pianificare»).
+// ---------------------------------------------------------------------
+export async function riportaLavoroDaFare(lavoroId: string): Promise<{ errore?: string }> {
+  await richiediRuolo("titolare", "ufficio");
+  if (!idONull(lavoroId)) return { errore: "Lavoro non valido." };
+
+  const supabase = await creaClientServer();
+  const { data, error } = await supabase
+    .from("lavori")
+    .update({ stato: "da_fare" })
+    .eq("id", lavoroId)
+    .select("commessa_id, titolo");
+  if (error) return { errore: spiega(error) };
+  if (!data?.length) return { errore: "Lavoro non trovato o permessi insufficienti." };
+
+  revalidatePath("/produzione");
+  const commessa = data[0].commessa_id as string | null;
+  redirect(commessa ? indirizzo({ id: commessa, ok: `«${data[0].titolo}» riportato a da fare.` }) : indirizzo({ scheda: "programma" }));
+}
