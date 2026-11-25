@@ -19,7 +19,7 @@ import {
 } from "@/lib/validazioni";
 
 // Pagine a cui si può tornare dopo un salvataggio (i dipendenti si modificano anche da Anagrafiche).
-const RITORNI = ["/impostazioni", "/anagrafiche?scheda=dipendenti"];
+const RITORNI = ["/impostazioni", "/impostazioni?scheda=tariffe", "/impostazioni?scheda=azienda", "/anagrafiche?scheda=dipendenti"];
 
 function torna(messaggio: string, errore = false, ritorno = "/impostazioni"): never {
   const base = RITORNI.includes(ritorno) ? ritorno : "/impostazioni";
@@ -98,6 +98,7 @@ export async function salvaDipendente(dati: FormData) {
 // Tariffe orarie (solo titolare: lo impone anche il database)
 // ---------------------------------------------------------------------
 const TIPI_TARIFFA = ["persona", "macchina", "posa"];
+const T = "/impostazioni?scheda=tariffe";
 
 function spiegaErroreTariffa(errore: PostgrestError): string {
   if (errore.code === "23505") return "Esiste già una tariffa attiva con questo nome.";
@@ -113,9 +114,9 @@ export async function salvaTariffa(dati: FormData) {
   const tipo = testo(dati, "tipo");
   const costo = leggiNumero(testo(dati, "costo_orario"));
 
-  if (!nome) torna("Il nome della tariffa è obbligatorio.", true);
-  if (!TIPI_TARIFFA.includes(tipo)) torna("Tipo di tariffa non valido.", true);
-  if (costo === null || costo < 0) torna(`Costo orario non valido per «${nome}»: scrivi ad esempio 45 o 45,50.`, true);
+  if (!nome) torna("Il nome della tariffa è obbligatorio.", true, T);
+  if (!TIPI_TARIFFA.includes(tipo)) torna("Tipo di tariffa non valido.", true, T);
+  if (costo === null || costo < 0) torna(`Costo orario non valido per «${nome}»: scrivi ad esempio 45 o 45,50.`, true, T);
 
   const valori = {
     nome,
@@ -128,9 +129,9 @@ export async function salvaTariffa(dati: FormData) {
 
   if (!id) {
     const { error } = await supabase.from("tariffe_orarie").insert(valori);
-    if (error) torna(spiegaErroreTariffa(error), true);
+    if (error) torna(spiegaErroreTariffa(error), true, T);
     revalidatePath("/impostazioni");
-    torna(`Tariffa «${nome}» aggiunta.`);
+    torna(`Tariffa «${nome}» aggiunta.`, false, T);
   }
 
   const { data, error } = await supabase
@@ -138,12 +139,12 @@ export async function salvaTariffa(dati: FormData) {
     .update({ ...valori, attivo: dati.get("attivo") === "on" })
     .eq("id", id)
     .select("id");
-  if (error) torna(spiegaErroreTariffa(error), true);
-  if (!data?.length) torna("Tariffa non trovata o permessi insufficienti.", true);
+  if (error) torna(spiegaErroreTariffa(error), true, T);
+  if (!data?.length) torna("Tariffa non trovata o permessi insufficienti.", true, T);
 
   revalidatePath("/impostazioni");
   revalidatePath("/preventivi");
-  torna(`Tariffa «${nome}» salvata.`);
+  torna(`Tariffa «${nome}» salvata.`, false, T);
 }
 
 
@@ -218,5 +219,5 @@ export async function salvaAzienda(_prima: StatoAzienda, dati: FormData): Promis
 
   revalidatePath("/impostazioni");
   revalidatePath("/stampa", "layout");
-  torna("Dati dell'azienda salvati.");
+  torna("Dati dell'azienda salvati.", false, "/impostazioni?scheda=azienda");
 }

@@ -1,4 +1,6 @@
-// Impostazioni (solo titolare): attivazione account, ruoli, anagrafica dipendenti, tariffe orarie, dati dell'azienda.
+// Impostazioni (solo titolare), divise in schede (?scheda=…):
+// Utenti (account e dipendenti), Tariffe orarie, Macchine e competenze (con l'orario), Dati dell'azienda.
+import Link from "next/link";
 import { richiediSezione } from "@/lib/utente";
 import { creaClientServer } from "@/lib/supabase/server";
 import { ETICHETTE_RUOLO, RUOLI, type Ruolo } from "@/lib/ruoli";
@@ -6,6 +8,15 @@ import { salvaProfilo } from "./azioni";
 import ElencoDipendenti from "@/components/ElencoDipendenti";
 import ElencoTariffe, { type Tariffa } from "./ElencoTariffe";
 import ModuloAzienda, { type Azienda } from "./ModuloAzienda";
+import SchedaMacchine from "./SchedaMacchine";
+
+type Chiave = "utenti" | "tariffe" | "macchine" | "azienda";
+const SCHEDE: { chiave: Chiave; etichetta: string }[] = [
+  { chiave: "utenti", etichetta: "Utenti" },
+  { chiave: "tariffe", etichetta: "Tariffe orarie" },
+  { chiave: "macchine", etichetta: "Macchine e competenze" },
+  { chiave: "azienda", etichetta: "Dati dell'azienda" },
+];
 
 type Profilo = { id: string; email: string; nome_visualizzato: string; ruolo: Ruolo; attivo: boolean };
 type Dipendente = {
@@ -25,30 +36,39 @@ const pulsante = "rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-wh
 export default async function Impostazioni({
   searchParams,
 }: {
-  searchParams: Promise<{ ok?: string; errore?: string }>;
+  searchParams: Promise<{ scheda?: string; orario?: string; ok?: string; errore?: string }>;
 }) {
   const io = await richiediSezione("/impostazioni");
-  const { ok, errore } = await searchParams;
+  const { scheda: chiave, orario, ok, errore } = await searchParams;
+  const scheda = SCHEDE.find((s) => s.chiave === chiave) ?? SCHEDE[0];
 
   const supabase = await creaClientServer();
+  // si leggono solo i dati della scheda aperta
+  const vuoto = Promise.resolve({ data: null });
   const [risProfili, risDipendenti, risTariffe, risAzienda] = await Promise.all([
-    supabase
-      .from("profili")
-      .select("id, email, nome_visualizzato, ruolo, attivo")
-      .order("attivo", { ascending: true })
-      .order("email"),
-    supabase
-      .from("dipendenti")
-      .select("id, nome, cognome, mansione_principale, profilo_id, attivo")
-      .order("attivo", { ascending: false })
-      .order("cognome"),
-    supabase
-      .from("tariffe_orarie")
-      .select("id, nome, tipo, costo_orario, note, attivo")
-      .order("attivo", { ascending: false })
-      .order("tipo")
-      .order("nome"),
-    supabase.from("azienda").select("*").maybeSingle(),
+    scheda.chiave !== "utenti"
+      ? vuoto
+      : supabase
+          .from("profili")
+          .select("id, email, nome_visualizzato, ruolo, attivo")
+          .order("attivo", { ascending: true })
+          .order("email"),
+    scheda.chiave !== "utenti"
+      ? vuoto
+      : supabase
+          .from("dipendenti")
+          .select("id, nome, cognome, mansione_principale, profilo_id, attivo")
+          .order("attivo", { ascending: false })
+          .order("cognome"),
+    scheda.chiave !== "tariffe"
+      ? vuoto
+      : supabase
+          .from("tariffe_orarie")
+          .select("id, nome, tipo, costo_orario, note, attivo")
+          .order("attivo", { ascending: false })
+          .order("tipo")
+          .order("nome"),
+    scheda.chiave !== "azienda" ? vuoto : supabase.from("azienda").select("*").maybeSingle(),
   ]);
   const profili = (risProfili.data ?? []) as Profilo[];
   const dipendenti = (risDipendenti.data ?? []) as Dipendente[];
@@ -56,10 +76,10 @@ export default async function Impostazioni({
   const azienda = (risAzienda.data ?? null) as Azienda | null;
 
   return (
-    <div className="flex max-w-5xl flex-col gap-8">
+    <div className={`flex flex-col gap-8 ${scheda.chiave === "macchine" ? "max-w-6xl" : "max-w-5xl"}`}>
       <header>
         <h1 className="text-2xl font-semibold">Impostazioni</h1>
-        <p className="mt-1 text-sm text-slate-500">Account, ruoli, personale, tariffe orarie e dati dell&apos;azienda.</p>
+        <p className="mt-1 text-sm text-slate-500">Le modifica solo il titolare.</p>
       </header>
 
       {ok && (
@@ -69,6 +89,28 @@ export default async function Impostazioni({
         <p role="alert" className="rounded-lg bg-red-50 px-4 py-3 text-sm text-red-800">{errore}</p>
       )}
 
+      <nav aria-label="Sezioni delle impostazioni" className="-mb-4 flex gap-1 overflow-x-auto border-b border-slate-300">
+        {SCHEDE.map((s) => {
+          const attiva = s.chiave === scheda.chiave;
+          return (
+            <Link
+              key={s.chiave}
+              href={s.chiave === "utenti" ? "/impostazioni" : `/impostazioni?scheda=${s.chiave}`}
+              aria-current={attiva ? "page" : undefined}
+              className={`border-b-[3px] px-4 py-3 text-sm whitespace-nowrap ${
+                attiva
+                  ? "border-blue-600 font-bold text-slate-900"
+                  : "border-transparent font-semibold text-slate-600 hover:text-slate-900"
+              }`}
+            >
+              {s.etichetta}
+            </Link>
+          );
+        })}
+      </nav>
+
+      {scheda.chiave === "utenti" && (
+      <>
       {/* ---------------- Account ---------------- */}
       <section className="rounded-xl border border-slate-200 bg-white">
         <div className="border-b border-slate-200 p-4">
@@ -127,12 +169,17 @@ export default async function Impostazioni({
 
       {/* ---------------- Dipendenti (stesso elenco della scheda Anagrafiche) ---------------- */}
       <ElencoDipendenti dipendenti={dipendenti} account={profili} modificabile ritorno="/impostazioni" />
+      </>
+      )}
 
       {/* ---------------- Tariffe orarie (usate nei preventivi) ---------------- */}
-      <ElencoTariffe tariffe={tariffe} />
+      {scheda.chiave === "tariffe" && <ElencoTariffe tariffe={tariffe} />}
+
+      {/* ---------------- Macchine, competenze e orario (programma del giorno) ---------------- */}
+      {scheda.chiave === "macchine" && <SchedaMacchine orarioDi={orario} />}
 
       {/* ---------------- Dati dell'azienda (intestazione dei documenti) ---------------- */}
-      <ModuloAzienda key={azienda?.aggiornato_il ?? "nuova"} azienda={azienda} />
+      {scheda.chiave === "azienda" && <ModuloAzienda key={azienda?.aggiornato_il ?? "nuova"} azienda={azienda} />}
     </div>
   );
 }

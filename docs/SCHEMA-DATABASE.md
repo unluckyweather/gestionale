@@ -466,7 +466,7 @@ Dati iniziali (nell'azienda più vecchia): Stampante UV piana, Stampante UV RTR 
 | dalle, alle | time | una riga per fascia (es. 08:00–12:30 e 13:30–17:00 = 2 righe) |
 
 > Se una persona ha almeno una fascia sua, per lei vale **solo** il suo orario (part-time, sabato). Un giorno senza fasce = non lavorativo. Funzione `fasce_orario(azienda, dipendente, giorno)`.
-> Dati iniziali: lun–ven 08:00–12:30 e 13:30–17:00 per ogni azienda; le aziende nuove lo ricevono da sole (trigger `y_orario_iniziale` su `azienda`).
+> Dati iniziali: lun–ven 08:00–12:30 e 13:30–17:00 (**8 ore**, confermato il 25/11; il commento «7,5 h» nella 0010 è sbagliato ma la migrazione è già applicata) per ogni azienda; le aziende nuove lo ricevono da sole (trigger `y_orario_iniziale` su `azienda`).
 
 ### `fermi_macchina` — manutenzioni e guasti
 `macchina_id`, `dal`, `al` (date), `dalle`, `alle` (time, facoltative: `dalle` vale per il primo giorno, `alle` per l'ultimo; senza ore = giorni interi), `motivo` (obbligatorio).

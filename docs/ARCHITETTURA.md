@@ -39,6 +39,7 @@ src/
   lib/
     validazioni.ts       controlli P.IVA / codice fiscale (cifra di controllo), lettura numeri "12,50", formato euro
     magazzino.ts         quantità e unità di magazzino («10 lastre»), livello dell'avviso
+    produzione.ts        etichette di macchine e competenze, giorni, fasce orarie e riassunto dell'orario
     ruoli.ts             ruoli e SEZIONI: chi vede quale scheda (unico punto da modificare)
     utente.ts            leggiUtente(), richiediUtente(), richiediRuolo(), richiediSezione()
     azioni-accesso.ts    login e logout
@@ -123,7 +124,7 @@ Ogni chat di sezione inizia con: *"Leggi ARCHITETTURA.md e SCHEMA-DATABASE.md, p
 - [ ] **Produzione** (piano approvato il 25/11; mockup: terza riga, artboard «Programma del giorno», «Macchine e competenze», «Ferie e permessi»). Requisiti: macchine Stampante UV piana, Stampante UV RTR, Canon Colorado, Plotter Summa, Fresa Zund, Fresa Jwei; ogni operaio usa una o più macchine e gli operai si sostituiscono; un operaio può seguire più macchine insieme (è un'informazione, non un errore); il programma del giorno, con orari precisi, lo prepara **solo il titolare**; ferie e permessi ne fanno parte. Decisioni del 25/11:
   1. **Numero della commessa = numero del preventivo**: la commessa nata dal preventivo 23/26 è la 23/26. Una commessa senza preventivo prende il numero successivo dallo **stesso contatore dei preventivi** (così nessun preventivo avrà mai lo stesso numero). Un preventivo ha al massimo una commessa attiva, e solo se è **accettato**.
   2. **Gli operai vedono il programma di tutti** (sola lettura, senza prezzi); in «Il mio programma» il proprio è in evidenza. Delle assenze dei colleghi vedono solo «assente» (il motivo «malattia» lo vede solo il titolare).
-  3. **Orario unico dell'azienda** (lun–ven 08:00–12:30 e 13:30–17:00); se serve, una persona può avere **un orario suo** (part-time, sabato), che sostituisce quello aziendale.
+  3. **Orario unico dell'azienda** (lun–ven 08:00–12:30 e 13:30–17:00 = **8 ore**); se serve, una persona può avere **un orario suo** (part-time, sabato), che sostituisce quello aziendale.
   4. Le fasi senza macchina diventano **postazioni** nel programma (Grafica, Laboratorio, Posa esterna).
   5. **Indirizzo della posa nel programma**, solo per le postazioni «fuori sede» (sede della commessa, se manca la sede legale del cliente).
 
@@ -136,6 +137,7 @@ Ogni chat di sezione inizia con: *"Leggi ARCHITETTURA.md e SCHEMA-DATABASE.md, p
   6. «Il mio programma» per gli operai da telefono (iniziato/finito);
   7. scarico del magazzino dalle commesse (passo 6 del Magazzino, colonna `movimenti_magazzino.commessa_id`).
   - [x] Passo 1 (25/11): `0010_produzione.sql` scritta e provata in locale con PGlite (71 controlli su 71, vedi SCHEMA-DATABASE sezione 4) ; applicata su `gestionale-dev` (25/11: RLS attiva sulle 8 tabelle, 9 macchine, orario creato); su `gestionale-prod` no finché non lo dice l'utente
+  - [x] Passo 2 (25/11): **Impostazioni divisa in schede** (`?scheda=`): Utenti, Tariffe orarie, Macchine e competenze, Dati dell'azienda (dopo un salvataggio si resta nella scheda). Scheda «Macchine e competenze» (`impostazioni/SchedaMacchine.tsx`, `azioniProduzione.ts`): macchine e postazioni (aggiungi, modifica, togli con «Attiva» spento; fermo in corso mostrato accanto), fermi macchina (registra, togli), tabella «chi sa usare cosa» (un clic: vuota → sa usarla → principale → vuota), orario dell'azienda e orari personali (`?orario=<dipendente>`, «Usa l'orario dell'azienda»), fino a due fasce al giorno. Nessuna migrazione nuova. Provato su `gestionale-dev` come titolare (competenze, orario personale con il sabato e ritorno a quello aziendale, fermo registrato e tolto, salvataggio di una macchina)
 - [ ] Timbrature
 - [ ] Dashboard
 
