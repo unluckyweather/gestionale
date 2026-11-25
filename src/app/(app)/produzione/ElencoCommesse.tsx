@@ -9,6 +9,7 @@ import {
   EtichettaUrgente,
   Messaggi,
   STATI_COMMESSA,
+  SchedeProduzione,
   indirizzo,
   oreTesto,
   type StatoCommessa,
@@ -100,6 +101,7 @@ export default async function ElencoCommesse({ p, modificabile }: { p: Parametri
         )}
       </header>
 
+      <SchedeProduzione attiva="commesse" />
       <Messaggi ok={p.ok} errore={p.errore} />
 
       {daConvertire.length > 0 && (

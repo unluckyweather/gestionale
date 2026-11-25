@@ -82,3 +82,29 @@ export function programmato(l: { ore_programmate: number; primo_giorno: string |
     l.primo_giorno === l.ultimo_giorno ? `il ${dataIt(l.primo_giorno)}` : `dal ${dataIt(l.primo_giorno)} al ${dataIt(l.ultimo_giorno)}`;
   return `nel programma ${quando} (${oreTesto(l.ore_programmate)})`;
 }
+
+/** Schede "Commesse · Programma del giorno". */
+export function SchedeProduzione({ attiva }: { attiva: "commesse" | "programma" }) {
+  const schede = [
+    { chiave: "commesse", etichetta: "Commesse", href: indirizzo({}) },
+    { chiave: "programma", etichetta: "Programma del giorno", href: indirizzo({ scheda: "programma" }) },
+  ];
+  return (
+    <nav aria-label="Sezioni della produzione" className="-mb-px flex gap-1 overflow-x-auto border-b border-slate-300 print:hidden">
+      {schede.map((x) => (
+        <Link
+          key={x.chiave}
+          href={x.href}
+          aria-current={x.chiave === attiva ? "page" : undefined}
+          className={`border-b-[3px] px-4 py-3 text-sm whitespace-nowrap ${
+            x.chiave === attiva
+              ? "border-blue-600 font-bold text-slate-900"
+              : "border-transparent font-semibold text-slate-600 hover:text-slate-900"
+          }`}
+        >
+          {x.etichetta}
+        </Link>
+      ))}
+    </nav>
+  );
+}
