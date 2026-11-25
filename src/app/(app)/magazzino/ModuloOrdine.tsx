@@ -163,9 +163,9 @@ export default function ModuloOrdine(props: Props) {
     );
   }
 
-  // articoli nella tendina: prima quelli del fornitore scelto, poi gli altri
-  const delFornitore = articoli.filter((a) => a.fornitore_id && a.fornitore_id === testata.soggetto_id);
-  const altri = articoli.filter((a) => !(a.fornitore_id && a.fornitore_id === testata.soggetto_id));
+  // articoli nella tendina: solo quelli che hanno come fornitore abituale il fornitore scelto
+  // (più, riga per riga, l'articolo già scelto, così non sparisce se si cambia fornitore)
+  const delFornitore = testata.soggetto_id ? articoli.filter((a) => a.fornitore_id === testata.soggetto_id) : [];
 
   const totale = righe.reduce((s, r) => {
     const q = leggiNumero(r.quantita) ?? 0;
@@ -320,16 +320,15 @@ export default function ModuloOrdine(props: Props) {
                         aria-label={`Articolo della riga ${i + 1}`}
                         className={`${campo} min-w-56`}
                       >
-                        <option value="">— scegli l&apos;articolo —</option>
-                        {delFornitore.length > 0 && (
-                          <optgroup label="Di questo fornitore">
-                            {delFornitore.map((x) => <OpzioneArticolo key={x.id} a={x} />)}
-                          </optgroup>
-                        )}
-                        <optgroup label={delFornitore.length > 0 ? "Altri articoli" : "Articoli"}>
-                          {altri.map((x) => <OpzioneArticolo key={x.id} a={x} />)}
-                        </optgroup>
+                        <option value="">
+                          {testata.soggetto_id ? "— scegli l'articolo —" : "— scegli prima il fornitore —"}
+                        </option>
+                        {a && !delFornitore.includes(a) && <OpzioneArticolo a={a} />}
+                        {delFornitore.map((x) => <OpzioneArticolo key={x.id} a={x} />)}
                       </select>
+                      {a && testata.soggetto_id && !delFornitore.includes(a) && !solaLettura && (
+                        <p className="mt-1 text-xs text-amber-800">Questo articolo non ha come fornitore abituale il fornitore scelto.</p>
+                      )}
                       {a && (
                         <p className="mt-1 text-xs text-slate-500">
                           In magazzino:{" "}
@@ -396,6 +395,11 @@ export default function ModuloOrdine(props: Props) {
             <tfoot>
               <tr>
                 <td className="px-4 py-3">
+                  {!solaLettura && testata.soggetto_id && delFornitore.length === 0 && (
+                    <p className="mb-2 text-xs text-amber-800">
+                      Nessun articolo ha questo fornitore come fornitore abituale: impostalo nella scheda dell&apos;articolo (Anagrafiche → Articoli).
+                    </p>
+                  )}
                   {!solaLettura && (
                     <button
                       type="button"

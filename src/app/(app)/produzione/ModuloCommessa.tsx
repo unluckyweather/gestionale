@@ -366,9 +366,9 @@ export default function ModuloCommessa(props: Props) {
                         type="button"
                         disabled={riportando}
                         onClick={() => riportaDaFare(r.info!.id, r.info!.titolo)}
-                        className="font-semibold text-blue-700 hover:underline disabled:opacity-50"
+                        className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
                       >
-                        Riporta a da fare
+                        ↺ Riporta a da fare
                       </button>
                     )}
                     {props.pianifica && daProgrammare(r.info) && (
