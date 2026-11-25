@@ -530,7 +530,7 @@ Dati iniziali (nell'azienda più vecchia): Stampante UV piana, Stampante UV RTR 
 ### Viste
 Tutte senza prezzi. Le prime quattro **non** sono `security_invoker` (mostrano agli operai dati di tabelle che non leggono): filtrano a mano ruolo attivo e azienda.
 - **`programma`**: assegnazioni attive con ore, lavoro (titolo, stato), commessa (numero, descrizione, consegna), `cliente`, `urgente` (lavoro o commessa), macchina, persona, `mio` (è di chi legge), `luogo_posa` (solo postazioni fuori sede: sede della commessa, altrimenti sede legale del cliente) e gli avvisi `senza_persona`, `senza_competenza`, `persona_assente`, `macchina_ferma`, `fuori_orario` (non sta dentro una fascia dell'orario della persona), e le informazioni `persona_su_piu_lavori`, `macchina_su_piu_lavori`.
-- **`commesse_elenco`**: commesse con `cliente`, `luogo`, `lavori`, `lavori_finiti`, `ore_previste`, `ore_finite`, `avanzamento` (% sulle ore, o sul numero di lavori se mancano le ore).
+- **`commesse_elenco`**: commesse con `cliente`, `luogo`, `lavori`, `lavori_finiti`, `ore_previste`, `ore_finite`, `avanzamento` (% sulle ore, o sul numero di lavori se mancano le ore). **Difetto noto (25/11):** se nessun lavoro è finito `avanzamento` esce vuoto invece di 0 (manca un `coalesce` su `ore_finite`); l'app lo tratta come 0. Da correggere nella prossima migrazione.
 - **`dipendenti_elenco`**: `id`, `nome`, `cognome`, `nome_completo`, `attivo`, `io`.
 - **`assenze_elenco`**: assenze attive di tutti con `motivo` = tipo, ma «assente» al posto di «malattia» per chi non è titolare né la persona stessa; `note` solo per loro.
 - **`lavori_riepilogo`** (`security_invoker`): per lavoro `ore_previste`, `ore_programmate`, `ore_da_programmare`, `primo_giorno`, `ultimo_giorno`.

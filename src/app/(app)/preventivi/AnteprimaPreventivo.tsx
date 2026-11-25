@@ -19,6 +19,7 @@ type Preventivo = {
   attivo: boolean;
   prezzo_cliente: number | null;
   cliente: { denominazione: string } | null;
+  commesse: { id: string; numero: string; attivo: boolean }[] | null;
 };
 
 type Totali = {
@@ -43,7 +44,7 @@ export default async function AnteprimaPreventivo({ supabase, id, modificabile, 
   const [risPreventivo, risTotali, risFasi, risCostiFasi] = await Promise.all([
     supabase
       .from("preventivi")
-      .select("id, numero, oggetto, data, valido_fino, stato, attivo, prezzo_cliente, cliente:soggetti(denominazione)")
+      .select("id, numero, oggetto, data, valido_fino, stato, attivo, prezzo_cliente, cliente:soggetti(denominazione), commesse(id, numero, attivo)")
       .eq("id", id)
       .maybeSingle(),
     supabase
@@ -75,6 +76,7 @@ export default async function AnteprimaPreventivo({ supabase, id, modificabile, 
   const costi = new Map((risCostiFasi.data ?? []).map((c) => [c.fase_id as string, c]));
   // accettati e rifiutati non si modificano più (lo impone anche il database)
   const bloccato = p.stato === "accettato" || p.stato === "rifiutato" || !p.attivo;
+  const commessaAttiva = (p.commesse ?? []).find((c) => c.attivo);
 
   return (
     <section
@@ -163,6 +165,19 @@ export default async function AnteprimaPreventivo({ supabase, id, modificabile, 
         <Link href={indirizzo({ id: p.id })} className={`${pulsante} flex flex-[1_1_100%] items-center justify-center`}>
           {modificabile && !bloccato ? "Apri e modifica" : "Apri"}
         </Link>
+        {commessaAttiva ? (
+          <Link href={`/produzione?id=${commessaAttiva.id}`} className={`${pulsanteSecondario} flex-[1_1_100%] justify-center`}>
+            Apri la commessa {commessaAttiva.numero}
+          </Link>
+        ) : (
+          modificabile &&
+          p.stato === "accettato" &&
+          p.attivo && (
+            <Link href={`/produzione?id=nuova&preventivo=${p.id}`} className={`${pulsanteSecondario} flex-[1_1_100%] justify-center border-green-700 text-green-800`}>
+              Converti in commessa
+            </Link>
+          )
+        )}
         {modificabile && <PulsanteDuplica id={p.id} numero={p.numero} />}
         <Link href={`/stampa/preventivi/${p.id}`} className={`${pulsanteSecondario} flex-[1_1_120px] justify-center`}>
           Stampa / PDF

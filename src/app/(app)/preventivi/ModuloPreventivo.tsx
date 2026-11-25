@@ -37,6 +37,8 @@ type Props = {
   modelli: { id: string; nome: string }[]; // per "Parti da un modello"
   oggi: string;
   modificabile: boolean;
+  /** commessa attiva nata da questo preventivo (Produzione) */
+  commessa?: { id: string; numero: string } | null;
   ok?: string;
   errore?: string;
 };
@@ -282,6 +284,7 @@ export default function ModuloPreventivo(props: Props) {
           archiviato={archiviato}
           modificato={modificato}
           chiedi={chiedi}
+          commessa={props.commessa ?? null}
         />
       )}
 
@@ -486,9 +489,10 @@ type PropsBarra = {
   archiviato: boolean;
   modificato: boolean;
   chiedi: (domanda: string, conferma?: string) => Promise<boolean>;
+  commessa: { id: string; numero: string } | null;
 };
 
-function BarraStato({ id, stato, archiviato, modificato, chiedi }: PropsBarra) {
+function BarraStato({ id, stato, archiviato, modificato, chiedi, commessa }: PropsBarra) {
   const bloccato = stato === "accettato" || stato === "rifiutato";
   const [inCorso, avvia] = useTransition();
   const fermo = modificato || archiviato || inCorso;
@@ -537,6 +541,19 @@ function BarraStato({ id, stato, archiviato, modificato, chiedi }: PropsBarra) {
       )}
       {modificato && <span className="text-xs text-amber-800">Salva prima le modifiche</span>}
       {inCorso && <span className="text-xs text-slate-500">Un momento…</span>}
+      {commessa ? (
+        <Link href={`/produzione?id=${commessa.id}`} className="font-semibold text-blue-700 hover:underline">
+          Apri la commessa {commessa.numero} →
+        </Link>
+      ) : (
+        stato === "accettato" &&
+        !archiviato &&
+        !modificato && (
+          <Link href={`/produzione?id=nuova&preventivo=${id}`} className="rounded-full bg-green-700 px-3.5 py-1.5 font-semibold text-white hover:bg-green-800">
+            Converti in commessa →
+          </Link>
+        )
+      )}
       <button
         type="button"
         disabled={modificato || inCorso}

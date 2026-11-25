@@ -14,7 +14,7 @@ export default async function SchedaPreventivo({ id, modificabile, ok, errore }:
   if (nuovo && !modificabile) return <Avviso testo="Non hai i permessi per creare preventivi." />;
 
   const supabase = await creaClientServer();
-  const [risPreventivo, fasi, scelte, risClienti, risIva, risModelli] = await Promise.all([
+  const [risPreventivo, fasi, scelte, risClienti, risIva, risModelli, risCommessa] = await Promise.all([
     nuovo
       ? Promise.resolve({ data: null, error: null })
       : supabase
@@ -38,6 +38,10 @@ export default async function SchedaPreventivo({ id, modificabile, ok, errore }:
       .order("aliquota", { ascending: false })
       .order("codice"),
     supabase.from("modelli_lavorazione").select("id, nome").eq("attivo", true).order("nome"),
+    // commessa nata da questo preventivo (Produzione, 0010): solo per il collegamento
+    nuovo
+      ? Promise.resolve({ data: null })
+      : supabase.from("commesse").select("id, numero").eq("preventivo_id", id).eq("attivo", true).maybeSingle(),
   ]);
 
   // Se una lettura non va, NON si mostra un preventivo incompleto: salvandolo,
@@ -68,6 +72,7 @@ export default async function SchedaPreventivo({ id, modificabile, ok, errore }:
       modelli={(risModelli.data ?? []) as { id: string; nome: string }[]}
       oggi={oggiItalia()}
       modificabile={modificabile}
+      commessa={(risCommessa.data ?? null) as { id: string; numero: string } | null}
       ok={ok}
       errore={errore}
     />
