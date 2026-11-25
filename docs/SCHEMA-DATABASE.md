@@ -2,7 +2,7 @@
 
 > **Documento di riferimento condiviso.** Ogni chat del progetto lo legge prima di toccare il database.
 > Chi aggiunge o modifica una tabella aggiorna questo file nello stesso momento.
-> Stato: **v1.0** (24/11/2026) – **Multi-azienda in `0009_multi_azienda.sql` (applicata su `gestionale-dev` il 24/11, sezione 0)**. Fondamenta in `0001_fondamenta.sql` e Anagrafiche in `0002_anagrafiche.sql` (entrambe applicate su `gestionale-dev`). Preventivi in `0003_preventivi.sql` (applicata su `gestionale-dev`). Materiali a lastra in `0004_lastre.sql`, stampa in `0005_stampa.sql` (entrambe applicate su `gestionale-dev`). Categorie merceologiche dei materiali in `0006_categorie_merceologiche.sql` (applicata su `gestionale-dev`). Magazzino e ordini d'acquisto in `0007_magazzino_ordini.sql` (applicata su `gestionale-dev` il 23/11); inventario anche per gli operai in `0008_inventario_operai.sql` (applicata su `gestionale-dev` il 23/11). Le altre sezioni sono bozza.
+> Stato: **v1.1** (25/11/2026) – **Produzione in `0010_produzione.sql` (applicata su `gestionale-dev` il 25/11, sezione 4)**. Multi-azienda in `0009_multi_azienda.sql` (applicata su `gestionale-dev` il 24/11, sezione 0). Fondamenta in `0001_fondamenta.sql` e Anagrafiche in `0002_anagrafiche.sql` (entrambe applicate su `gestionale-dev`). Preventivi in `0003_preventivi.sql` (applicata su `gestionale-dev`). Materiali a lastra in `0004_lastre.sql`, stampa in `0005_stampa.sql` (entrambe applicate su `gestionale-dev`). Categorie merceologiche dei materiali in `0006_categorie_merceologiche.sql` (applicata su `gestionale-dev`). Magazzino e ordini d'acquisto in `0007_magazzino_ordini.sql` (applicata su `gestionale-dev` il 23/11); inventario anche per gli operai in `0008_inventario_operai.sql` (applicata su `gestionale-dev` il 23/11). Le altre sezioni sono bozza.
 > Mockup confermato (19/11): https://claude.ai/artifact/B5LEbqMxrBA2FJXqQu8U4s — preventivi a fasi + scheda cliente/fornitore "proposta v3".
 
 ## Regole comuni a tutte le tabelle
@@ -57,6 +57,7 @@ Nomi dei trigger: `a_…` protezioni, `b_aggiornamento`, `z_registro` (Postgres 
 | Preventivi | `preventivi` | azienda dell'utente (controllo su cliente, modello, codice IVA) |
 | figlie | `fasi_preventivo` (dal preventivo o dal modello), `ore_fase` e `materiali_fase` (dalla fase; controllo su tariffa e articolo) | dal padre |
 | Magazzino | `ordini_acquisto` (controllo sul fornitore), `righe_ordine_acquisto` (dall'ordine; controllo sull'articolo), `movimenti_magazzino` (dall'articolo; controllo sulla riga d'ordine) | dal padre |
+| Produzione (0010) | `macchine`, `competenze`, `orari_lavoro`, `fermi_macchina`, `commesse` (controllo su preventivo, cliente, sede), `lavori`, `assegnazioni`, `assenze` | azienda dell'utente o dal padre |
 
 ### Regole RLS
 Ogni tabella sopra (e `azienda` con `id`) riceve **una regola in più, "restrittiva"**: `azienda_id = (select public.azienda_corrente())`, sia per leggere sia per scrivere. Postgres la mette **in "e"** con le regole per ruolo che esistono già: per vedere una riga serve il ruolo giusto **e** la stessa azienda. Le regole per ruolo non cambiano.
@@ -126,7 +127,7 @@ Enum `azione_registro`: `creazione`, `modifica`, `archiviazione`.
 | prima, dopo | jsonb | riga intera prima e dopo la modifica |
 
 > Si scrive **solo** tramite il trigger `registra_modifica` (gli utenti non possono inserire, modificare o cancellare).
-> Oggi tracciate: `profili`, `dipendenti` e (con la 0002) tutte le tabelle delle Anagrafiche; con la 0003 anche `preventivi`, fasi, righe, tariffe e modelli; da tracciare `timbrature` (obbligo di tracciare le correzioni), `commesse`.
+> Oggi tracciate: `profili`, `dipendenti` e (con la 0002) tutte le tabelle delle Anagrafiche; con la 0003 anche `preventivi`, fasi, righe, tariffe e modelli; con la 0010 tutte le tabelle della Produzione; da tracciare `timbrature` (obbligo di tracciare le correzioni).
 > Serve anche per le "Attività recenti" della Dashboard e per il pulsante "Storico modifiche" della scheda cliente/fornitore.
 
 ### Permessi Fondamenta (attivi)
@@ -294,7 +295,7 @@ Dati iniziali: Rimessa diretta (0), Bonifico 30 gg (30), Bonifico 60 gg (60).
 | codici_iva, condizioni_pagamento, banche_aziendali | lettura, inserimento, modifica | lettura | lettura, inserimento, modifica | — |
 
 > Proposta: le tabelle "fiscali" (codici IVA, pagamenti, banche aziendali) le modificano titolare e contabilità. Da confermare.
-> **Per la chat Produzione:** gli operai non leggono `soggetti`. Se nelle commesse/task devono vedere il nome del cliente o l'indirizzo di posa, serve una vista apposita (solo nome e sede delle commesse visibili).
+> Gli operai non leggono `soggetti`: nome del cliente e indirizzo di posa li vedono nelle viste `commesse_elenco` e `programma` (0010).
 > **GDPR:** le persone fisiche e i contatti sono dati personali → campi privacy nella scheda; nessun dato di soggetti va mostrato agli operai oltre al necessario.
 
 ---
@@ -324,7 +325,7 @@ Enum nuovi: `tipo_tariffa` (`persona`, `macchina`, `posa`), `stato_preventivo` (
 ### `numeratori` — nuova (ultimo numero usato)
 | campo | tipo | note |
 |---|---|---|
-| documento | text | `preventivo` (poi `commessa`…) |
+| documento | text | `preventivo` (usato anche dalle commesse senza preventivo), `ordine_acquisto` |
 | anno | smallint | |
 | ultimo | int | ultimo progressivo usato |
 
@@ -429,37 +430,124 @@ Tutte le tabelle hanno `attivo`, i campi `creato_*`/`aggiornato_*`, i trigger `b
 
 ---
 
-## 4. Produzione
+## 4. Produzione — v1.1 (25/11), in `0010_produzione.sql` (applicata su `gestionale-dev` il 25/11)
+
+Mockup: terza riga, artboard *Programma del giorno*, *Macchine e competenze*, *Ferie e permessi*. Piano e decisioni del 25/11 in ARCHITETTURA.md (Stato di avanzamento → Produzione).
+
+Come funziona: una **commessa** nasce da un preventivo accettato (o a mano) ed è fatta di **lavori** (uno per fase, con macchina e ore). Il titolare prepara il **programma del giorno** con le **assegnazioni** (chi, quale lavoro, su quale macchina, dalle–alle). La vista `programma` aggiunge gli **avvisi** (persona assente, macchina ferma, fuori orario, senza competenza): sono informazioni, non blocchi. Gli operai segnano i lavori «iniziato» e «finito»; lo stato della commessa si aggiorna da solo.
+
+Enum nuovi: `tipo_macchina` (`macchina`, `postazione`), `livello_competenza` (`principale`, `sa_usarla`), `stato_commessa` (`da_pianificare`, `in_lavorazione`, `controllo_qualita`, `completata`), `stato_lavoro` (`da_fare`, `in_corso`, `finito`), `tipo_assenza` (`ferie`, `permesso`, `malattia`).
+
+Tutte le tabelle hanno `azienda_id` (regola "stessa azienda", trigger `a0_azienda`), `attivo`, `creato_*`/`aggiornato_*`, i trigger `b_aggiornamento`, `vieta_cancellazione`, `z_registro`.
+
+### `macchine` — macchine e postazioni (le righe del programma)
+| campo | tipo | note |
+|---|---|---|
+| nome | text | unico tra le attive (per azienda) |
+| tipo | tipo_macchina | `macchina`, oppure `postazione` senza macchina (Grafica, Laboratorio, Posa esterna) |
+| reparto | text | es. "Stampa", "Taglio", "Fresa" |
+| tariffa_id | uuid → tariffe_orarie | facoltativa: serve a riconoscere le fasi del preventivo (fase con ore a quella tariffa → lavoro su questa macchina) |
+| fuori_sede | bool | posa: nel programma si vede l'indirizzo |
+| ordine | int | posizione nel programma |
+| note | text | |
+
+Dati iniziali (nell'azienda più vecchia): Stampante UV piana, Stampante UV RTR (tariffa «Stampante UV»), Canon Colorado, Plotter Summa, Fresa Zund, Fresa Jwei; postazioni Grafica, Laboratorio (tariffe omonime), Posa esterna (fuori sede, tariffa «Posa (trasferta compresa)»). Tariffe mancanti da collegare in Impostazioni.
+
+> **Tutto modificabile dal titolare** (Impostazioni → «Macchine e competenze»): aggiungere macchine o postazioni, cambiare nome, tipo, reparto, tariffa, ordine. Una macchina venduta o una postazione tolta si **archivia** (`attivo = false`), non si cancella: i programmi passati la mostrano ancora. Il nome è unico solo tra le attive, quindi una macchina nuova può riprendere il nome di una archiviata. **Non si archivia** una macchina che ha ancora lavori nel programma da oggi in poi: vanno prima spostati su un'altra (trigger `a_normalizza`).
+
+### `competenze` — chi sa usare cosa
+`dipendente_id` → dipendenti, `macchina_id` → macchine, `livello` (`principale` = è la sua macchina, `sa_usarla` = può sostituire). Una riga per coppia (`unique`): tolta → `attivo = false`, se torna si riattiva la stessa riga.
+
+### `orari_lavoro` — fasce dell'orario di lavoro
+| campo | tipo | note |
+|---|---|---|
+| dipendente_id | uuid → dipendenti | **vuoto = orario dell'azienda** |
+| giorno_settimana | smallint | 1 = lunedì … 7 = domenica |
+| dalle, alle | time | una riga per fascia (es. 08:00–12:30 e 13:30–17:00 = 2 righe) |
+
+> Se una persona ha almeno una fascia sua, per lei vale **solo** il suo orario (part-time, sabato). Un giorno senza fasce = non lavorativo. Funzione `fasce_orario(azienda, dipendente, giorno)`.
+> Dati iniziali: lun–ven 08:00–12:30 e 13:30–17:00 per ogni azienda; le aziende nuove lo ricevono da sole (trigger `y_orario_iniziale` su `azienda`).
+
+### `fermi_macchina` — manutenzioni e guasti
+`macchina_id`, `dal`, `al` (date), `dalle`, `alle` (time, facoltative: `dalle` vale per il primo giorno, `alle` per l'ultimo; senza ore = giorni interi), `motivo` (obbligatorio).
 
 ### `commesse`
 | campo | tipo | note |
 |---|---|---|
-| numero | text | come i preventivi: `41/26`, progressivo per anno (tabella `numeratori`, documento `commessa`) |
-| preventivo_id | uuid → preventivi | facoltativo (commessa senza preventivo) |
-| soggetto_id | uuid → soggetti | cliente |
-| sede_id | uuid → sedi_soggetto | facoltativo: dove si fa la posa / la consegna |
-| descrizione | text | |
+| anno, progressivo, numero | | **uguali al preventivo** (23/26 → commessa 23/26); senza preventivo: numero successivo dallo **stesso contatore dei preventivi** (`numeratori`, documento `preventivo`), così nessun preventivo avrà mai quel numero. Unico tra le attive. Non cambia più |
+| preventivo_id | uuid → preventivi | facoltativo; deve essere **accettato**; al massimo una commessa attiva per preventivo; non cambia più |
+| soggetto_id | uuid → soggetti | cliente (non fornitore); con il preventivo: copiato dal preventivo |
+| sede_id | uuid → sedi_soggetto | facoltativa, del cliente: dove si fa la posa / la consegna |
+| descrizione | text | obbligatoria; con il preventivo: se vuota, l'oggetto del preventivo |
+| data | date | predefinita oggi |
 | data_consegna | date | |
-| stato | enum | `da_pianificare`, `in_lavorazione`, `controllo_qualita`, `completata` |
+| stato | stato_commessa | **automatico** (sotto); `completata` la segnano titolare o ufficio |
 | urgente | bool | |
-| avanzamento | int | 0–100 % |
-| ore_previste | numeric(6,2) | copiate dal preventivo alla conversione |
+| note | text | interne |
 
-> Ore reali = somma delle timbrature con `commessa_id` (calcolate). La Dashboard mostra "Ore previste e ore reali".
-> Alla conversione in commessa, le fasi del preventivo possono diventare task (da decidere nella chat Produzione).
+> **Stato automatico** (dopo ogni modifica di lavori e assegnazioni): tutti i lavori finiti → `controllo_qualita`; qualcosa nel programma, iniziato o finito → `in_lavorazione`; altrimenti `da_pianificare`. Una commessa `completata` non cambia più da sola.
+> Ore previste, ore finite e avanzamento si **calcolano** dai lavori (vista `commesse_elenco`); le ore reali verranno dalle timbrature.
 
-### `task` — mansioni e task (anche urgenti)
+### `lavori` — i pezzi di una commessa
 | campo | tipo | note |
 |---|---|---|
-| titolo | text | es. "Taglio e preparazione" |
-| commessa_id | uuid → commesse | vuoto per lavori interni (manutenzione) |
-| dipendente_id | uuid → dipendenti | a chi è assegnato |
-| giorno | date | |
-| ora_inizio, ora_fine | time | |
-| stato | enum | `da_iniziare`, `in_corso`, `completato` |
+| commessa_id | uuid → commesse | **vuoto = lavoro interno** (manutenzione…); non cambia più |
+| fase_id | uuid → fasi_preventivo | da quale fase viene; dev'essere del preventivo della commessa |
+| ordine | int | |
+| titolo | text | obbligatorio, es. "Stampa" |
+| descrizione | text | |
+| macchina_id | uuid → macchine | macchina o postazione prevista |
+| ore_previste | numeric(6,2) | dalla fase del preventivo, modificabili |
+| stato | stato_lavoro | `da_fare`, `in_corso`, `finito` |
+| iniziato_il, finito_il | timestamptz | li scrive il database quando cambia lo stato |
 | urgente | bool | |
+| note | text | |
 
-> Dashboard: riquadro "Pose e installazioni in programma" → serve distinguere i task di posa fuori sede (es. campo `tipo` o `luogo`), da definire.
+> Gli **operai** possono cambiare **solo lo stato** dei lavori che hanno nel programma (trigger `a_normalizza` + regola RLS).
+> Un lavoro con assegnazioni da oggi in poi non si archivia (prima va tolto dal programma).
+
+### `assegnazioni` — il programma del giorno
+| campo | tipo | note |
+|---|---|---|
+| lavoro_id | uuid → lavori | obbligatorio, non cambia più |
+| dipendente_id | uuid → dipendenti | vuoto = «da assegnare» |
+| macchina_id | uuid → macchine | se vuota: quella del lavoro |
+| giorno | date | |
+| dalle, alle | time | `alle` > `dalle` |
+| note | text | |
+
+> Un lavoro si può dividere in più assegnazioni (giorni, persone). Più lavori nello stesso momento sono **permessi**: la vista `programma` lo segnala come informazione.
+
+### `assenze` — ferie, permessi, malattia (prima in sezione 5)
+`dipendente_id`, `tipo` (`ferie`, `permesso`, `malattia`), `dal`, `al`, `dalle`, `alle` (facoltative, come i fermi: permesso a ore = stesso giorno con le ore), `note`. Il motivo «malattia» lo vede solo il titolare (e la persona stessa).
+
+### Funzioni
+- `periodo(dal, al, dalle, alle)`: il periodo come intervallo di tempo (per i confronti di assenze, fermi e assegnazioni).
+- `indirizzo_testo(…)`: "Via Roma 5, 35100 Padova (PD)".
+- `fasce_orario(azienda, dipendente, giorno)`: fasce di lavoro di quel giorno.
+- **`salva_commessa(p_id, p_commessa, p_lavori)`**: come `salva_ordine_acquisto` (tutto o niente; lavori con `id` aggiornati, senza nuovi, mancanti archiviati). `p_commessa`: `preventivo_id` (solo alla creazione), `soggetto_id`, `sede_id`, `descrizione`, `data`, `data_consegna`, `urgente`, `note`. `p_lavori`: `fase_id`, `titolo`, `descrizione`, `macchina_id`, `ore_previste`, `urgente`, `note`. Gli stati non si cambiano da qui. Restituisce l'id.
+
+### Viste
+Tutte senza prezzi. Le prime quattro **non** sono `security_invoker` (mostrano agli operai dati di tabelle che non leggono): filtrano a mano ruolo attivo e azienda.
+- **`programma`**: assegnazioni attive con ore, lavoro (titolo, stato), commessa (numero, descrizione, consegna), `cliente`, `urgente` (lavoro o commessa), macchina, persona, `mio` (è di chi legge), `luogo_posa` (solo postazioni fuori sede: sede della commessa, altrimenti sede legale del cliente) e gli avvisi `senza_persona`, `senza_competenza`, `persona_assente`, `macchina_ferma`, `fuori_orario` (non sta dentro una fascia dell'orario della persona), e le informazioni `persona_su_piu_lavori`, `macchina_su_piu_lavori`.
+- **`commesse_elenco`**: commesse con `cliente`, `luogo`, `lavori`, `lavori_finiti`, `ore_previste`, `ore_finite`, `avanzamento` (% sulle ore, o sul numero di lavori se mancano le ore).
+- **`dipendenti_elenco`**: `id`, `nome`, `cognome`, `nome_completo`, `attivo`, `io`.
+- **`assenze_elenco`**: assenze attive di tutti con `motivo` = tipo, ma «assente» al posto di «malattia» per chi non è titolare né la persona stessa; `note` solo per loro.
+- **`lavori_riepilogo`** (`security_invoker`): per lavoro `ore_previste`, `ore_programmate`, `ore_da_programmare`, `primo_giorno`, `ultimo_giorno`.
+
+### Permessi Produzione
+| | Titolare | Ufficio | Contabilità | Operaio |
+|---|---|---|---|---|
+| macchine, competenze, orari_lavoro, fermi_macchina | tutto (no cancellazione) | lettura | lettura | lettura |
+| commesse, lavori | lettura, inserimento, modifica | lettura, inserimento, modifica | lettura | lettura; **solo lo stato** dei lavori a lui assegnati |
+| assegnazioni (programma) | tutto (no cancellazione) | lettura | lettura | lettura |
+| assenze | tutto (no cancellazione) | solo le proprie | solo le proprie | solo le proprie |
+| viste programma, commesse_elenco, dipendenti_elenco, assenze_elenco | sì | sì | sì | sì |
+
+### Prove (25/11)
+In locale con PGlite (0001→0010, dati di prova, poi una seconda azienda): **71 controlli su 71**. Dati iniziali (9 macchine, orario), competenze e orario part-time; «Converti in commessa» con lo stesso numero (1/26), seconda commessa dallo stesso preventivo rifiutata, commessa a mano 3/26 e preventivo successivo 4/26; fase di un altro preventivo, fornitore e sede di un altro cliente rifiutati; avvisi del programma (assente, macchina ferma, fuori orario anche part-time, senza competenza, senza persona, più lavori insieme); operaio: vede tutto il programma con il cliente, non legge soggetti/preventivi, cambia solo lo stato dei propri lavori; malattia «assente» per ufficio e operai; stato della commessa automatico; macchine rinominate, trasformate in postazione, archiviate (bloccate se hanno lavori nel programma da oggi in poi) e riaggiunte con lo stesso nome; permessi dei 4 ruoli, utenti non collegati, seconda azienda isolata (con il suo 1/26).
+
+> Le **timbrature** potranno avere `commessa_id` o `lavoro_id` per le ore reali (chat Timbrature). Lo **scarico del magazzino** dalle commesse è il passo 7 (colonna `movimenti_magazzino.commessa_id`, nuova migrazione).
 
 ---
 
@@ -479,8 +567,7 @@ Tutte le tabelle hanno `attivo`, i campi `creato_*`/`aggiornato_*`, i trigger `b
 > Le ore lavorate e gli stati si **calcolano** dalle timbrature, non si salvano.
 > Le correzioni dell'ufficio finiscono in `registro_modifiche`.
 
-### `assenze`
-`dipendente_id`, `tipo` (`ferie`, `permesso`, `altro`), `dal`, `al`, `note`.
+> Ferie, permessi e malattia stanno in `assenze` (sezione 4, `0010_produzione.sql`).
 
 ---
 
@@ -572,7 +659,8 @@ Da definire. La scheda anagrafica prepara già i dati per la fatturazione elettr
 | Dipendenti | tutto (anche da Anagrafiche) | lettura | lettura | solo sé stesso |
 | Preventivi (fasi, ore, materiali, modelli, costi e margini) | tutto | tutto | lettura | — |
 | Tariffe orarie | tutto | lettura | lettura | — |
-| Commesse e task | tutto | tutto | lettura | solo i propri task |
+| Commesse e lavori | tutto | tutto | lettura | lettura senza prezzi; solo lo stato dei propri lavori |
+| Programma, macchine, assenze | tutto | lettura (assenze: «assente») | lettura (assenze: «assente») | lettura (assenze: «assente»; le proprie complete) |
 | Timbrature | tutto | lettura e correzione | lettura ed export | solo le proprie, solo nuove |
 | Registro modifiche | lettura | — | — | — |
 

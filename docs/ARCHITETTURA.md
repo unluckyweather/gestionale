@@ -56,9 +56,9 @@ docs/                    questi documenti
 - I moduli lunghi sono componenti `"use client"` con `useActionState`: se il salvataggio non va, il modulo resta compilato e mostra l'errore.
 
 ## Regole
-1. **Il database si cambia solo con file in `supabase/migrations/`**, numerati in ordine (`0001_fondamenta.sql`, `0002_anagrafiche.sql`, `0003_preventivi.sql`, `0004_lastre.sql`, `0005_stampa.sql`, `0006_categorie_merceologiche.sql`, `0007_magazzino_ordini.sql`, `0008_inventario_operai.sql`, `0009_multi_azienda.sql`…), mai a mano dal pannello. Così lo stesso schema si ricrea identico su `gestionale-prod`. Per ora una migrazione si applica incollando il file intero in Supabase → **SQL Editor** → Run (una volta sola per database). Una migrazione **non ancora applicata** da nessuna parte si può ancora correggere; una già applicata no (si crea la successiva).
+1. **Il database si cambia solo con file in `supabase/migrations/`**, numerati in ordine (`0001_fondamenta.sql`, `0002_anagrafiche.sql`, `0003_preventivi.sql`, `0004_lastre.sql`, `0005_stampa.sql`, `0006_categorie_merceologiche.sql`, `0007_magazzino_ordini.sql`, `0008_inventario_operai.sql`, `0009_multi_azienda.sql`, `0010_produzione.sql`…), mai a mano dal pannello. Così lo stesso schema si ricrea identico su `gestionale-prod`. Per ora una migrazione si applica incollando il file intero in Supabase → **SQL Editor** → Run (una volta sola per database). Una migrazione **non ancora applicata** da nessuna parte si può ancora correggere; una già applicata no (si crea la successiva).
 2. **`docs/SCHEMA-DATABASE.md` è la fonte di verità** sulle tabelle: chi cambia una tabella lo aggiorna.
-3. Le **tabelle condivise** (`profili`, `dipendenti`, `soggetti`, `articoli`, `codici_iva`, `preventivi`, `numeratori`, `commesse`, `movimenti_magazzino`, `registro_modifiche`) si modificano con cautela: altre sezioni le usano.
+3. Le **tabelle condivise** (`profili`, `dipendenti`, `soggetti`, `articoli`, `codici_iva`, `preventivi`, `numeratori`, `commesse`, `lavori`, `movimenti_magazzino`, `registro_modifiche`) si modificano con cautela: altre sezioni le usano.
 4. Interfaccia e nomi in **italiano**.
 5. Le chiavi stanno solo in `.env.local` (mai su GitHub, mai in chat).
 6. A fine lavoro: `git add .` → `git commit -m "..."` → `git push`.
@@ -81,7 +81,7 @@ docs/                    questi documenti
 | **Fondamenta** | login, profili, ruoli, dipendenti, registro modifiche, impaginazione | — |
 | **Anagrafiche** | clienti/fornitori (azienda, persona, PA, esteri), contatti, sedi, banca e scadenze, reverse charge, dichiarazioni d'intento; catalogo materiali; codici IVA, pagamenti, banche aziendali | Fondamenta |
 | **Preventivi** | preventivi a fasi (ore × tariffa + materiali + ricarico), tariffe orarie, modelli di lavorazione, PDF per il cliente, invio email ai contatti giusti | Anagrafiche |
-| **Produzione** | commesse (con ore previste e sede di posa), task, pose fuori sede, piano settimanale | Preventivi |
+| **Produzione** | macchine e competenze, commesse e lavori (dalle fasi del preventivo), programma del giorno, ferie e permessi | Preventivi |
 | **Timbrature** | timbratura da telefono (anche offline), presenze, export | Fondamenta, Produzione |
 | **Dashboard** | indicatori, attività recenti, ore previste/reali, pose in programma | tutte |
 
@@ -120,7 +120,22 @@ Ogni chat di sezione inizia con: *"Leggi ARCHITETTURA.md e SCHEMA-DATABASE.md, p
   - [x] Inventario anche per gli **operai** (richiesta del 23/11): `0008_inventario_operai.sql` (regola di inserimento dei movimenti con `rettifica`) provata in locale e applicata su `gestionale-dev` (23/11); nell'app il pulsante «Inventario» è per tutti tranne la contabilità, che ora vede le giacenze in sola lettura (prima vedeva il modulo ma il database la rifiutava)
 - [x] **Multi-azienda** (24/11): `0009_multi_azienda.sql` (SCHEMA-DATABASE sezione 0) provata in locale con PGlite, backup `backup_prima_0009` e applicata su `gestionale-dev`; test con una seconda azienda di prova (`supabase/prove/test_isolamento_aziende.sql`): nessun dato visibile o modificabile tra aziende; utente e azienda di prova spenti. App: Impostazioni salva solo la propria azienda, un'azienda spenta porta a «account non attivo»
 - [ ] Preventivi: passo 7 (PDF vero e invio email) — **rimandato (22/11)**: si fa dopo l'approvazione del progetto da parte del datore di lavoro. Piano proposto in «Da fare più avanti (Preventivi)». Nel frattempo il PDF si ottiene con «Stampa → Salva come PDF» e si allega a mano
-- [ ] Produzione
+- [ ] **Produzione** (piano approvato il 25/11; mockup: terza riga, artboard «Programma del giorno», «Macchine e competenze», «Ferie e permessi»). Requisiti: macchine Stampante UV piana, Stampante UV RTR, Canon Colorado, Plotter Summa, Fresa Zund, Fresa Jwei; ogni operaio usa una o più macchine e gli operai si sostituiscono; un operaio può seguire più macchine insieme (è un'informazione, non un errore); il programma del giorno, con orari precisi, lo prepara **solo il titolare**; ferie e permessi ne fanno parte. Decisioni del 25/11:
+  1. **Numero della commessa = numero del preventivo**: la commessa nata dal preventivo 23/26 è la 23/26. Una commessa senza preventivo prende il numero successivo dallo **stesso contatore dei preventivi** (così nessun preventivo avrà mai lo stesso numero). Un preventivo ha al massimo una commessa attiva, e solo se è **accettato**.
+  2. **Gli operai vedono il programma di tutti** (sola lettura, senza prezzi); in «Il mio programma» il proprio è in evidenza. Delle assenze dei colleghi vedono solo «assente» (il motivo «malattia» lo vede solo il titolare).
+  3. **Orario unico dell'azienda** (lun–ven 08:00–12:30 e 13:30–17:00); se serve, una persona può avere **un orario suo** (part-time, sabato), che sostituisce quello aziendale.
+  4. Le fasi senza macchina diventano **postazioni** nel programma (Grafica, Laboratorio, Posa esterna).
+  5. **Indirizzo della posa nel programma**, solo per le postazioni «fuori sede» (sede della commessa, se manca la sede legale del cliente).
+
+  Permessi: macchine, competenze, orari e fermi li modifica il titolare e li leggono tutti; commesse e lavori li modificano titolare e ufficio, la contabilità li legge, gli operai li leggono senza prezzi (nome del cliente e indirizzo tramite viste) e cambiano solo lo stato dei lavori a loro assegnati; il programma (assegnazioni) lo scrive solo il titolare; le assenze le scrive il titolare, ognuno vede le proprie. Passi (ognuno dopo l'ok):
+  1. migrazione `0010_produzione.sql` (macchine, competenze, orari, fermi, commesse, lavori, assegnazioni, assenze; viste del programma con gli avvisi; stato della commessa automatico), provata in locale con PGlite;
+  2. Impostazioni → «Macchine e competenze», con l'orario;
+  3. Commesse: «Converti in commessa» dal preventivo accettato (fasi → lavori da controllare), commessa a mano, elenco per stato, pagina della commessa;
+  4. Ferie e permessi dentro Timbrature;
+  5. Programma del giorno: vista per macchina e per persona, avvisi, «Chi può farlo», stampa A4; si assegna con un clic e un modulo (il trascinamento dopo);
+  6. «Il mio programma» per gli operai da telefono (iniziato/finito);
+  7. scarico del magazzino dalle commesse (passo 6 del Magazzino, colonna `movimenti_magazzino.commessa_id`).
+  - [x] Passo 1 (25/11): `0010_produzione.sql` scritta e provata in locale con PGlite (71 controlli su 71, vedi SCHEMA-DATABASE sezione 4) ; applicata su `gestionale-dev` (25/11: RLS attiva sulle 8 tabelle, 9 macchine, orario creato); su `gestionale-prod` no finché non lo dice l'utente
 - [ ] Timbrature
 - [ ] Dashboard
 
