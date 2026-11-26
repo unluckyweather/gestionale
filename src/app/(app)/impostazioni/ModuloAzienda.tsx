@@ -25,6 +25,11 @@ export type Azienda = {
   capitale_sociale: string | null;
   piede_documenti: string | null;
   logo: string | null;
+  // timbratura vicino alla ditta (0013)
+  posizione_controllo: boolean;
+  posizione_lat: number | null;
+  posizione_lon: number | null;
+  posizione_raggio_m: number;
   aggiornato_il: string;
 };
 

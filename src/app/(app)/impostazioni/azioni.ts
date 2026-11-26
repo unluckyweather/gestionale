@@ -221,3 +221,55 @@ export async function salvaAzienda(_prima: StatoAzienda, dati: FormData): Promis
   revalidatePath("/stampa", "layout");
   torna("Dati dell'azienda salvati.", false, "/impostazioni?scheda=azienda");
 }
+
+
+// ---------------------------------------------------------------------
+// Timbratura vicino alla ditta (0013) — solo titolare
+// Posizione della ditta e raggio; il controllo si accende solo con le coordinate.
+// ---------------------------------------------------------------------
+export type StatoPosizione = { errore?: string; valori?: Record<string, string> };
+
+export async function salvaPosizione(_prima: StatoPosizione, dati: FormData): Promise<StatoPosizione> {
+  await richiediRuolo("titolare");
+  const valori = {
+    posizione_lat: testo(dati, "posizione_lat"),
+    posizione_lon: testo(dati, "posizione_lon"),
+    posizione_raggio_m: testo(dati, "posizione_raggio_m"),
+    posizione_controllo: dati.get("posizione_controllo") === "on" ? "on" : "",
+  };
+  const sbaglio = (errore: string): StatoPosizione => ({ errore, valori });
+
+  const lat = valori.posizione_lat ? leggiNumero(valori.posizione_lat) : null;
+  const lon = valori.posizione_lon ? leggiNumero(valori.posizione_lon) : null;
+  const raggio = leggiNumero(valori.posizione_raggio_m || "200");
+  const acceso = valori.posizione_controllo === "on";
+
+  if (valori.posizione_lat && (lat === null || lat < -90 || lat > 90)) return sbaglio("Latitudine non valida (es. 45,406435).");
+  if (valori.posizione_lon && (lon === null || lon < -180 || lon > 180)) return sbaglio("Longitudine non valida (es. 11,876761).");
+  if ((lat === null) !== (lon === null)) return sbaglio("Servono tutte e due: latitudine e longitudine.");
+  if (raggio === null || !Number.isInteger(raggio) || raggio < 50 || raggio > 5000) return sbaglio("Il raggio va da 50 a 5000 metri.");
+  if (acceso && lat === null) return sbaglio("Per accendere il controllo serve la posizione della ditta.");
+
+  const id = testo(dati, "id");
+  if (!id) return sbaglio("Dati dell'azienda non trovati: ricarica la pagina.");
+  const supabase = await creaClientServer();
+  const { data, error } = await supabase
+    .from("azienda")
+    .update({
+      posizione_lat: lat === null ? null : Math.round(lat * 1e6) / 1e6,
+      posizione_lon: lon === null ? null : Math.round(lon * 1e6) / 1e6,
+      posizione_raggio_m: raggio,
+      posizione_controllo: acceso,
+    })
+    .eq("id", id)
+    .select("id");
+  if (error) {
+    if (error.code === "42703") return sbaglio("Manca la migrazione 0013 sul database.");
+    return sbaglio(spiegaErrore(error));
+  }
+  if (!data?.length) return sbaglio("Salvataggio non riuscito: permessi insufficienti.");
+
+  revalidatePath("/impostazioni");
+  revalidatePath("/timbrature");
+  torna(acceso ? "Posizione salvata: controllo «vicino alla ditta» acceso." : "Posizione salvata: controllo spento.", false, "/impostazioni?scheda=azienda");
+}

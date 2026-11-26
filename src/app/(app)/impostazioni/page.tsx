@@ -8,6 +8,7 @@ import { salvaProfilo } from "./azioni";
 import ElencoDipendenti from "@/components/ElencoDipendenti";
 import ElencoTariffe, { type Tariffa } from "./ElencoTariffe";
 import ModuloAzienda, { type Azienda } from "./ModuloAzienda";
+import ModuloPosizione from "./ModuloPosizione";
 import SchedaMacchine from "./SchedaMacchine";
 
 type Chiave = "utenti" | "tariffe" | "macchine" | "azienda";
@@ -203,6 +204,7 @@ export default async function Impostazioni({
 
       {/* ---------------- Dati dell'azienda (intestazione dei documenti) ---------------- */}
       {scheda.chiave === "azienda" && <ModuloAzienda key={azienda?.aggiornato_il ?? "nuova"} azienda={azienda} />}
+      {scheda.chiave === "azienda" && azienda && <ModuloPosizione key={`pos-${azienda.aggiornato_il}`} azienda={azienda} />}
     </div>
   );
 }

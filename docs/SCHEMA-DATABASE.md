@@ -2,7 +2,7 @@
 
 > **Documento di riferimento condiviso.** Ogni chat del progetto lo legge prima di toccare il database.
 > Chi aggiunge o modifica una tabella aggiorna questo file nello stesso momento.
-> Stato: **v1.2** (25/11/2026) – **Scarico del magazzino dalle commesse in `0011_scarico_commesse.sql` (applicata su `gestionale-dev` il 25/11, sezioni 4 e 6b)**. Produzione in `0010_produzione.sql` (applicata su `gestionale-dev` il 25/11, sezione 4). Multi-azienda in `0009_multi_azienda.sql` (applicata su `gestionale-dev` il 24/11, sezione 0). Fondamenta in `0001_fondamenta.sql` e Anagrafiche in `0002_anagrafiche.sql` (entrambe applicate su `gestionale-dev`). Preventivi in `0003_preventivi.sql` (applicata su `gestionale-dev`). Materiali a lastra in `0004_lastre.sql`, stampa in `0005_stampa.sql` (entrambe applicate su `gestionale-dev`). Categorie merceologiche dei materiali in `0006_categorie_merceologiche.sql` (applicata su `gestionale-dev`). Magazzino e ordini d'acquisto in `0007_magazzino_ordini.sql` (applicata su `gestionale-dev` il 23/11); inventario anche per gli operai in `0008_inventario_operai.sql` (applicata su `gestionale-dev` il 23/11). Le altre sezioni sono bozza.
+> Stato: **v1.3** (26/11/2026) – **Timbrature in `0013_timbrature.sql` (applicata su `gestionale-dev` il 26/11, sezione 5)**. Richieste di ferie e permessi in `0012_richieste_assenze.sql` (applicata su `gestionale-dev` il 26/11, sezione 4b). **Scarico del magazzino dalle commesse in `0011_scarico_commesse.sql` (applicata su `gestionale-dev` il 25/11, sezioni 4 e 6b)**. Produzione in `0010_produzione.sql` (applicata su `gestionale-dev` il 25/11, sezione 4). Multi-azienda in `0009_multi_azienda.sql` (applicata su `gestionale-dev` il 24/11, sezione 0). Fondamenta in `0001_fondamenta.sql` e Anagrafiche in `0002_anagrafiche.sql` (entrambe applicate su `gestionale-dev`). Preventivi in `0003_preventivi.sql` (applicata su `gestionale-dev`). Materiali a lastra in `0004_lastre.sql`, stampa in `0005_stampa.sql` (entrambe applicate su `gestionale-dev`). Categorie merceologiche dei materiali in `0006_categorie_merceologiche.sql` (applicata su `gestionale-dev`). Magazzino e ordini d'acquisto in `0007_magazzino_ordini.sql` (applicata su `gestionale-dev` il 23/11); inventario anche per gli operai in `0008_inventario_operai.sql` (applicata su `gestionale-dev` il 23/11). Le altre sezioni sono bozza.
 > Mockup confermato (19/11): https://claude.ai/artifact/B5LEbqMxrBA2FJXqQu8U4s — preventivi a fasi + scheda cliente/fornitore "proposta v3".
 
 ## Regole comuni a tutte le tabelle
@@ -127,7 +127,7 @@ Enum `azione_registro`: `creazione`, `modifica`, `archiviazione`.
 | prima, dopo | jsonb | riga intera prima e dopo la modifica |
 
 > Si scrive **solo** tramite il trigger `registra_modifica` (gli utenti non possono inserire, modificare o cancellare).
-> Oggi tracciate: `profili`, `dipendenti` e (con la 0002) tutte le tabelle delle Anagrafiche; con la 0003 anche `preventivi`, fasi, righe, tariffe e modelli; con la 0010 tutte le tabelle della Produzione; da tracciare `timbrature` (obbligo di tracciare le correzioni).
+> Oggi tracciate: `profili`, `dipendenti` e (con la 0002) tutte le tabelle delle Anagrafiche; con la 0003 anche `preventivi`, fasi, righe, tariffe e modelli; con la 0010 tutte le tabelle della Produzione; con la 0013 anche `timbrature` (obbligo di tracciare le correzioni).
 > Serve anche per le "Attività recenti" della Dashboard e per il pulsante "Storico modifiche" della scheda cliente/fornitore.
 
 ### Permessi Fondamenta (attivi)
@@ -571,23 +571,58 @@ Provata in locale con PGlite (26/11, 0001→0012): **34 controlli su 34** (assen
 
 ---
 
-## 5. Timbrature
+## 5. Timbrature — v1.0 (26/11), in `0013_timbrature.sql` (applicata su `gestionale-dev` il 26/11)
+
+**Decisioni del 26/11** (piano in ARCHITETTURA.md, Stato di avanzamento → Timbrature):
+- Ogni clic è una riga; ore lavorate, pause e stati si **calcolano** (vista `timbrature_giorno`), non si salvano.
+- Timbra chi è collegato a un dipendente, solo per sé, **solo con la funzione `timbra()`**: l'ora la decide il **server**. Eccezione: senza rete il telefono manda dopo la timbratura con la sua ora (al massimo 72 ore prima), e resta segnata «arrivata dopo».
+- **Correzioni**: titolare e ufficio aggiungono una timbratura dimenticata o ne annullano una sbagliata, sempre con il motivo. Una timbratura non si modifica mai: si annulla e se ne registra una nuova. Tutto finisce nel registro delle modifiche.
+- **Vicino alla ditta**: il titolare salva le coordinate della ditta e un raggio, poi accende il controllo (spento all'inizio). Il database calcola la distanza e salva **solo l'esito e la distanza arrotondata a 10 m, mai le coordinate**. Una timbratura fuori zona **si accetta e si segnala**; non si segnala se quel giorno la persona ha una posa nel programma (postazione fuori sede). Prima di accenderlo: consulente del lavoro e informativa ai dipendenti (Statuto dei lavoratori, art. 4).
+- Ore reali sulle commesse: per ora dai lavori del programma (iniziato/finito), non da una commessa scelta al momento della timbratura (`commessa_id` resta, facoltativo).
+
+Enum nuovi: `tipo_timbratura` (`entrata`, `inizio_pausa`, `fine_pausa`, `uscita`), `origine_timbratura` (`telefono`, `ufficio`), `esito_posizione` (`in_zona`, `fuori_zona`, `non_disponibile`).
+
+### `azienda` — colonne nuove (0013)
+`posizione_controllo` (bool, predefinito false), `posizione_lat`, `posizione_lon` (numeric(9,6), obbligatorie se il controllo è acceso), `posizione_raggio_m` (int, predefinito 200, da 50 a 5000). Le scrive il titolare (regole della 0005).
 
 ### `timbrature` — ogni "clic" è una riga
 | campo | tipo | note |
 |---|---|---|
 | dipendente_id | uuid → dipendenti | |
-| tipo | enum | `entrata`, `inizio_pausa`, `fine_pausa`, `uscita` |
-| orario | timestamptz | ora reale della timbratura |
-| commessa_id | uuid → commesse | facoltativo |
-| origine | enum | `telefono`, `ufficio` (correzione) |
-| id_locale | uuid | creato dal telefono: evita doppioni quando si sincronizza dopo l'offline |
+| tipo | tipo_timbratura | |
+| orario | timestamptz | ora del server; per quelle fatte senza rete l'ora del telefono |
+| commessa_id | uuid → commesse | facoltativo (per ora non usato) |
+| origine | origine_timbratura | `telefono` (da `timbra()`), `ufficio` (correzione) — lo decide il database |
+| id_locale | uuid | creato dal telefono, unico per dipendente: la stessa timbratura mandata due volte si salva una volta |
 | ricevuta_il | timestamptz | quando è arrivata al server |
+| posizione | esito_posizione | vuoto se il controllo è spento |
+| distanza_m | int | distanza dalla ditta, arrotondata a 10 m |
+| motivo | text | obbligatorio per le correzioni |
+| annullata_motivo | text | obbligatorio quando si annulla (`attivo = false`) |
+| note | text | |
 
-> Le ore lavorate e gli stati si **calcolano** dalle timbrature, non si salvano.
-> Le correzioni dell'ufficio finiscono in `registro_modifiche`.
+Trigger: `a0_azienda`, `a_normalizza` (`normalizza_timbratura`: correzioni con motivo e mai nel futuro; in modifica solo l'annullamento con motivo, niente riattivazione), `b_aggiornamento`, `vieta_cancellazione`, `z_registro`.
 
-> Ferie, permessi e malattia stanno in `assenze` (sezione 4, `0010_produzione.sql`).
+### Funzioni
+- **`timbra(p_tipo, p_lat, p_lon, p_precisione, p_id_locale, p_orario)`** (security definer): timbratura per il dipendente collegato a chi chiama. Doppio clic (stesso tipo entro 2 minuti) e stesso `id_locale` → restituisce quella già salvata. Controlla la sequenza (entrata → pausa/uscita, pausa → fine pausa…) solo dal vivo; quelle arrivate dopo si accettano e le anomalie le mostra la vista. Posizione: in zona se distanza − precisione del GPS (contata al massimo 100 m) ≤ raggio.
+- `controllo_posizione_attivo()`: il telefono sa se chiedere la posizione (gli operai non leggono `azienda`).
+- `distanza_metri(lat1, lon1, lat2, lon2)`: uso interno.
+
+### Vista `timbrature_giorno` (`security_invoker`)
+Una riga per persona e giorno (ora italiana): `entrata`, `uscita`, `ultima` (tipo dell'ultima timbratura), `ultima_il`, `timbrature`, `minuti_lavorati` (da entrata/fine pausa alla timbratura dopo; oggi, se si è dentro, fino ad adesso), `minuti_pausa` e le anomalie `sequenza_errata`, `uscita_mancante` (giorno passato senza uscita), `fuori_zona` (senza posa nel programma) con `distanza_max_m`, `posizione_mancante`, `arrivate_dopo` (oltre 10 minuti), `corrette`.
+
+### Permessi Timbrature
+| | Titolare | Ufficio | Contabilità | Operaio |
+|---|---|---|---|---|
+| timbrature | lettura, correzioni, annullamenti | come il titolare | lettura | le proprie, in lettura; nuove solo con `timbra()` |
+| posizione della ditta (`azienda`) | modifica | lettura | lettura | — (solo `controllo_posizione_attivo()`) |
+
+Chiunque sia collegato a un dipendente timbra con `timbra()`, qualunque sia il ruolo.
+
+### Prove (26/11)
+In locale con PGlite (0001→0013): **54 controlli su 54**. Entrata dal telefono con l'ora del server; doppio clic e `id_locale` ripetuto senza doppioni; sequenze sbagliate respinte (fine pausa senza pausa, entrata in pausa, uscita senza entrata); senza dipendente e non collegati respinti; senza rete: un'ora prima accettata, oltre 72 ore e nel futuro respinte; operaio: niente inserimenti diretti né annullamenti, legge solo le sue; contabilità legge tutto e non corregge; anon respinto su tabella e vista; correzioni senza motivo e nel futuro respinte, origine e posizione forzate; ora non modificabile, annullamento solo con motivo, niente riattivazione né cancellazione; registro; controllo acceso senza coordinate respinto, ufficio non lo accende; 110 m in zona, 280 m con GPS impreciso in zona, 3,3 km fuori zona accettata, senza posizione «non disponibile», nessuna coordinata salvata; vista: giornata piena 8 h e 1 h di pausa, uscita mancante e sequenza errata, oggi fino ad adesso, «arrivata dopo», fuori zona segnalato e non segnalato con una posa nel programma; seconda azienda isolata (controllo spento, timbra nella sua azienda).
+
+> Ferie, permessi e malattia stanno in `assenze` (sezione 4, `0010_produzione.sql`, e 4b).
 
 ---
 
