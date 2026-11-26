@@ -1,6 +1,7 @@
 // Timbrature (tutti gli utenti attivi), in schede:
 //   Presenze          → in costruzione (chat Timbrature)
-//   Ferie e permessi  → calendario di due settimane; le registra il titolare (?scheda=ferie&dal=<data>)
+//   Ferie e permessi  → calendario di due settimane; il titolare registra e decide le richieste,
+//                       gli altri chiedono per sé (?scheda=ferie&dal=<data>, 0012)
 import Link from "next/link";
 import { richiediSezione } from "@/lib/utente";
 import { oggiIt } from "@/lib/produzione";

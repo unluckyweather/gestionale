@@ -10,9 +10,11 @@ type Props = {
   voci: { href: string; etichetta: string }[];
   nome: string;
   ruolo: Ruolo;
+  /** numerino accanto a una voce (es. richieste da decidere), per indirizzo */
+  numeri?: Record<string, number>;
 };
 
-export default function BarraLaterale({ voci, nome, ruolo }: Props) {
+export default function BarraLaterale({ voci, nome, ruolo, numeri = {} }: Props) {
   const percorso = usePathname();
 
   return (
@@ -40,11 +42,19 @@ export default function BarraLaterale({ voci, nome, ruolo }: Props) {
               <Link
                 href={voce.href}
                 aria-current={attiva ? "page" : undefined}
-                className={`block rounded-lg px-3 py-2.5 text-sm font-medium whitespace-nowrap ${
+                className={`flex items-center gap-2 rounded-lg px-3 py-2.5 text-sm font-medium whitespace-nowrap ${
                   attiva ? "bg-blue-600 text-white" : "text-slate-300 hover:bg-slate-800 hover:text-white"
                 }`}
               >
                 {voce.etichetta}
+                {numeri[voce.href] > 0 && (
+                  <span
+                    aria-label={`${numeri[voce.href]} da decidere`}
+                    className="ml-auto rounded-full bg-amber-500 px-2 py-0.5 text-xs font-bold text-white"
+                  >
+                    {numeri[voce.href]}
+                  </span>
+                )}
               </Link>
             </li>
           );

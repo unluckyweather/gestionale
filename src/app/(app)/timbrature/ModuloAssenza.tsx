@@ -1,8 +1,11 @@
 "use client";
-// Modulo «Nuova assenza» (solo titolare): ferie e malattia a giorni, permesso a ore.
+// Modulo delle assenze: ferie e malattia a giorni, permesso a ore.
+//   - titolare: «Nuova assenza» per qualsiasi persona (nasce approvata);
+//   - richiesta (tutti gli altri collegati a un dipendente): «Chiedi ferie o
+//     permesso» per sé, senza malattia; la decide il titolare (0012).
 import { useState } from "react";
 import { campo, etichetta, pulsante, riquadro } from "../anagrafiche/stile";
-import { salvaAssenza } from "./azioni";
+import { chiediAssenza, salvaAssenza } from "./azioni";
 
 type Persona = { id: string; nome_completo: string };
 type Tipo = "ferie" | "permesso" | "malattia";
@@ -13,28 +16,35 @@ const TIPI: { valore: Tipo; etichetta: string }[] = [
   { valore: "malattia", etichetta: "Malattia" },
 ];
 
-export default function ModuloAssenza({ persone, oggi, settimana }: { persone: Persona[]; oggi: string; settimana: string }) {
+type Props = { oggi: string; settimana: string } & ({ richiesta?: false; persone: Persona[] } | { richiesta: true });
+
+export default function ModuloAssenza(props: Props) {
+  const { oggi, settimana } = props;
   const [tipo, setTipo] = useState<Tipo>("ferie");
   const aOre = tipo === "permesso";
+  const titolo = props.richiesta ? "Chiedi ferie o permesso" : "Nuova assenza";
+  const tipi = props.richiesta ? TIPI.filter((t) => t.valore !== "malattia") : TIPI;
 
   return (
-    <section aria-label="Nuova assenza" className={`${riquadro} flex flex-col gap-4 p-4`}>
-      <h2 className="font-semibold">Nuova assenza</h2>
-      <form action={salvaAssenza} className="flex flex-col gap-4">
+    <section aria-label={titolo} className={`${riquadro} flex flex-col gap-4 p-4`}>
+      <h2 className="font-semibold">{titolo}</h2>
+      <form action={props.richiesta ? chiediAssenza : salvaAssenza} className="flex flex-col gap-4">
         <input type="hidden" name="settimana" value={settimana} />
         <input type="hidden" name="tipo" value={tipo} />
-        <label className={etichetta}>
-          Persona
-          <select name="dipendente_id" required defaultValue="" className={campo}>
-            <option value="" disabled>Scegli…</option>
-            {persone.map((p) => (
-              <option key={p.id} value={p.id}>{p.nome_completo}</option>
-            ))}
-          </select>
-        </label>
+        {!props.richiesta && (
+          <label className={etichetta}>
+            Persona
+            <select name="dipendente_id" required defaultValue="" className={campo}>
+              <option value="" disabled>Scegli…</option>
+              {props.persone.map((p) => (
+                <option key={p.id} value={p.id}>{p.nome_completo}</option>
+              ))}
+            </select>
+          </label>
+        )}
 
         <div role="radiogroup" aria-label="Tipo di assenza" className="flex gap-1 rounded-xl bg-slate-200 p-1">
-          {TIPI.map((t) => (
+          {tipi.map((t) => (
             <button
               key={t.valore}
               type="button"
@@ -82,12 +92,18 @@ export default function ModuloAssenza({ persone, oggi, settimana }: { persone: P
 
         <label className={etichetta}>
           Note
-          <input name="note" placeholder="facoltative" className={campo} />
+          <input name="note" placeholder={props.richiesta ? "facoltative, le legge il titolare" : "facoltative"} className={campo} />
         </label>
-        <p className="rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-600">
-          Nel programma del giorno questa persona risulterà assente. {tipo === "malattia" && "Il motivo «malattia» lo vedete solo tu e la persona: agli altri compare «assente»."}
-        </p>
-        <button className={pulsante}>Salva assenza</button>
+        {props.richiesta ? (
+          <p className="rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-600">
+            La richiesta va al titolare. Finché non la approva, nel programma risulti presente. Per la malattia avvisa il titolare.
+          </p>
+        ) : (
+          <p className="rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-600">
+            Nel programma del giorno questa persona risulterà assente. {tipo === "malattia" && "Il motivo «malattia» lo vedete solo tu e la persona: agli altri compare «assente»."}
+          </p>
+        )}
+        <button className={pulsante}>{props.richiesta ? "Invia la richiesta" : "Salva assenza"}</button>
       </form>
     </section>
   );

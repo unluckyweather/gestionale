@@ -520,6 +520,7 @@ Dati iniziali (nell'azienda più vecchia): Stampante UV piana, Stampante UV RTR 
 
 ### `assenze` — ferie, permessi, malattia (prima in sezione 5)
 `dipendente_id`, `tipo` (`ferie`, `permesso`, `malattia`), `dal`, `al`, `dalle`, `alle` (facoltative, come i fermi: permesso a ore = stesso giorno con le ore), `note`. Il motivo «malattia» lo vede solo il titolare (e la persona stessa).
+Con la **0012** (richieste dall'app): `stato` (`richiesta`, `approvata`, `rifiutata`; predefinito `approvata`), `deciso_da`, `deciso_il` (li scrive il database), `risposta` (nota del titolare, es. motivo del rifiuto). Vedi sezione 4b.
 
 ### Funzioni
 - `periodo(dal, al, dalle, alle)`: il periodo come intervallo di tempo (per i confronti di assenze, fermi e assegnazioni).
@@ -541,13 +542,32 @@ Tutte senza prezzi. Le prime quattro **non** sono `security_invoker` (mostrano a
 | macchine, competenze, orari_lavoro, fermi_macchina | tutto (no cancellazione) | lettura | lettura | lettura |
 | commesse, lavori | lettura, inserimento, modifica | lettura, inserimento, modifica | lettura | lettura; **solo lo stato** dei lavori a lui assegnati |
 | assegnazioni (programma) | tutto (no cancellazione) | lettura | lettura | lettura |
-| assenze | tutto (no cancellazione) | solo le proprie | solo le proprie | solo le proprie |
+| assenze | tutto (no cancellazione); approva e rifiuta | le proprie; chiede ferie/permessi per sé e ritira le richieste in attesa (0012) | come ufficio | come ufficio |
 | viste programma, commesse_elenco, dipendenti_elenco, assenze_elenco | sì | sì | sì | sì |
 
 ### Prove (25/11)
 In locale con PGlite (0001→0010, dati di prova, poi una seconda azienda): **71 controlli su 71**; con la **0011** altri 14 (scarico e rientro, giacenze, `materiali_commessa`, operai e contabilità respinti, rettifica con commessa vietata, commessa del movimento fissa, annullamento, commessa archiviata, seconda azienda, avanzamento 0): **85 su 85**. Dati iniziali (9 macchine, orario), competenze e orario part-time; «Converti in commessa» con lo stesso numero (1/26), seconda commessa dallo stesso preventivo rifiutata, commessa a mano 3/26 e preventivo successivo 4/26; fase di un altro preventivo, fornitore e sede di un altro cliente rifiutati; avvisi del programma (assente, macchina ferma, fuori orario anche part-time, senza competenza, senza persona, più lavori insieme); operaio: vede tutto il programma con il cliente, non legge soggetti/preventivi, cambia solo lo stato dei propri lavori; malattia «assente» per ufficio e operai; stato della commessa automatico; macchine rinominate, trasformate in postazione, archiviate (bloccate se hanno lavori nel programma da oggi in poi) e riaggiunte con lo stesso nome; permessi dei 4 ruoli, utenti non collegati, seconda azienda isolata (con il suo 1/26).
 
 > Le **timbrature** potranno avere `commessa_id` o `lavoro_id` per le ore reali (chat Timbrature). Lo **scarico del magazzino** dalle commesse è il passo 7 (colonna `movimenti_magazzino.commessa_id`, nuova migrazione).
+
+---
+
+## 4b. Richieste di ferie e permessi — v1.0 (26/11), in `0012_richieste_assenze.sql` (applicata su `gestionale-dev` il 26/11)
+
+**Decisioni del 26/11:** chi lavora chiede ferie e permessi dall'app, il titolare approva o rifiuta.
+- Chiede chiunque sia **collegato a un dipendente** (operai, ufficio, contabilità), **solo per sé**, solo **ferie o permesso**: la **malattia** la registra il titolare.
+- Decide **solo il titolare**; quello che registra lui nasce **approvato**. Una decisione non torna «in attesa».
+- Chi ha chiesto può **ritirare** la richiesta finché non è decisa (`attivo = false`); dopo, solo il titolare può togliere l'assenza.
+- Una richiesta non si sovrappone a un'altra assenza o richiesta della stessa persona (le rifiutate non contano). Il titolare può registrare anche sovrapposte (come prima).
+- Nel **programma**, negli avvisi, in «Chi può farlo» e nel calendario contano **solo le assenze approvate** (vista `assenze_elenco` e avviso `persona_assente` della vista `programma`, stesse colonne della 0010).
+- Niente conteggio dei giorni di ferie rimasti (rimandato: dipende dal contratto, da chiedere al consulente del lavoro). Niente email o notifiche: il titolare vede un numerino accanto a «Timbrature» nel menu.
+
+Enum nuovo: `stato_assenza` (`richiesta`, `approvata`, `rifiutata`). Le assenze già presenti diventano `approvata`.
+Funzione nuova: `e_mio_dipendente(dipendente)` (vero se è il dipendente attivo collegato a chi legge), usata nelle regole RLS.
+Trigger `a_normalizza` (`normalizza_assenza`, riscritto): chi non è titolare inserisce solo `richiesta` (lo stato lo forza il database), mai malattia; in modifica può solo ritirare una richiesta in attesa; `deciso_da`/`deciso_il` li scrive il database quando cambia lo stato.
+Regole RLS nuove: «assenze: richiesta propria» (inserimento) e «assenze: ritiro della propria richiesta» (modifica); la lettura resta quella della 0010 (titolare tutto, ognuno le proprie).
+
+Provata in locale con PGlite (26/11, 0001→0012): **34 controlli su 34** (assenze vecchie approvate; stato forzato a «richiesta»; malattia, richiesta per un collega, sovrapposta e senza dipendente rifiutate; richieste invisibili a colleghi e ufficio e fuori da `assenze_elenco` e dagli avvisi del programma; niente modifiche né auto-approvazione, ritiro sì, riattivazione no; approvazione con chi/quando, poi in `assenze_elenco` e «assente» nel programma; ritiro dopo la decisione respinto; niente ritorno in attesa; `deciso_da` non falsificabile; richiesta dell'ufficio, rifiuto con motivo visto da chi ha chiesto, nuova richiesta dopo un rifiuto; registrazione del titolare approvata; nessuna cancellazione; registro modifiche; utenti non collegati respinti).
 
 ---
 
@@ -663,7 +683,7 @@ Da definire. La scheda anagrafica prepara già i dati per la fatturazione elettr
 | Preventivi (fasi, ore, materiali, modelli, costi e margini) | tutto | tutto | lettura | — |
 | Tariffe orarie | tutto | lettura | lettura | — |
 | Commesse e lavori | tutto | tutto | lettura | lettura senza prezzi; solo lo stato dei propri lavori |
-| Programma, macchine, assenze | tutto | lettura (assenze: «assente») | lettura (assenze: «assente») | lettura (assenze: «assente»; le proprie complete) |
+| Programma, macchine, assenze | tutto; approva/rifiuta le richieste | lettura (assenze: «assente»); chiede per sé | lettura (assenze: «assente»); chiede per sé | lettura (assenze: «assente»; le proprie complete); chiede per sé |
 | Timbrature | tutto | lettura e correzione | lettura ed export | solo le proprie, solo nuove |
 | Registro modifiche | lettura | — | — | — |
 
