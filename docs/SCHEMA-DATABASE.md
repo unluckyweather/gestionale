@@ -486,7 +486,7 @@ Dati iniziali (nell'azienda più vecchia): Stampante UV piana, Stampante UV RTR 
 | note | text | interne |
 
 > **Stato automatico** (dopo ogni modifica di lavori e assegnazioni): tutti i lavori finiti → `controllo_qualita`; qualcosa nel programma, iniziato o finito → `in_lavorazione`; altrimenti `da_pianificare`. Una commessa `completata` non cambia più da sola.
-> Ore previste, ore finite e avanzamento si **calcolano** dai lavori (vista `commesse_elenco`); le ore reali verranno dalle timbrature.
+> Ore previste, ore finite e avanzamento si **calcolano** dai lavori (vista `commesse_elenco`); le **ore reali** si calcolano nell'app (Dashboard, `src/lib/oreReali.ts`, 26/11): righe del programma dei lavori iniziati o finiti, contando solo il tempo in cui la persona era timbrata dentro. Nessuna colonna nuova.
 
 ### `lavori` — i pezzi di una commessa
 | campo | tipo | note |
