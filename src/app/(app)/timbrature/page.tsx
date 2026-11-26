@@ -4,6 +4,8 @@
 //   Presenze          → chi c'è, chi è in pausa, chi non ha timbrato (titolare, ufficio,
 //                       contabilità; ?scheda=presenze&giorno=<data>); titolare e ufficio
 //                       correggono (&correggi=<dipendente>: aggiungi o annulla, con il motivo)
+//   Ore del mese      → uffici: tutte le persone con i totali ed export CSV per il consulente;
+//                       gli altri: le proprie ore (?scheda=mese&mese=2026-11[&persona=<id>])
 //   Ferie e permessi  → calendario di due settimane; il titolare registra e decide le richieste,
 //                       gli altri chiedono per sé (?scheda=ferie&dal=<data>, 0012)
 import Link from "next/link";
@@ -12,13 +14,24 @@ import { oggiIt } from "@/lib/produzione";
 import { creaClientServer } from "@/lib/supabase/server";
 import SchedaAssenze from "./SchedaAssenze";
 import SchedaPresenze from "./SchedaPresenze";
+import SchedaMese from "./SchedaMese";
 import SchedaTimbra from "./SchedaTimbra";
 
-type Parametri = { scheda?: string; dal?: string; giorno?: string; correggi?: string; ok?: string; errore?: string };
+type Parametri = {
+  scheda?: string;
+  dal?: string;
+  giorno?: string;
+  correggi?: string;
+  mese?: string;
+  persona?: string;
+  ok?: string;
+  errore?: string;
+};
 
 const SCHEDE = [
   { chiave: "timbra", etichetta: "Timbra" },
   { chiave: "presenze", etichetta: "Presenze" },
+  { chiave: "mese", etichetta: "Ore del mese" },
   { chiave: "ferie", etichetta: "Ferie e permessi" },
 ];
 
@@ -69,6 +82,8 @@ export default async function Timbrature({ searchParams }: { searchParams: Promi
           correggi={p.correggi}
           puoCorreggere={io.ruolo === "titolare" || io.ruolo === "ufficio"}
         />
+      ) : scheda === "mese" ? (
+        <SchedaMese mese={p.mese} persona={p.persona} uffici={uffici} mio={mio?.id ?? null} />
       ) : (
         <SchedaAssenze dal={p.dal} titolare={io.ruolo === "titolare"} oggi={oggiIt()} />
       )}
