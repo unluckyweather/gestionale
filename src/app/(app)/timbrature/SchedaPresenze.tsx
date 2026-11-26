@@ -3,6 +3,7 @@
 // Indirizzo: /timbrature?scheda=presenze&giorno=<data>
 // Dati: timbrature del giorno (tabella), riepilogo e anomalie dalla vista timbrature_giorno
 // (0013), assenze approvate (assenze_elenco), orari di lavoro (orari_lavoro).
+import { Fragment } from "react";
 import Link from "next/link";
 import { creaClientServer } from "@/lib/supabase/server";
 import { dataIt, oggiIt } from "@/lib/produzione";
@@ -18,6 +19,7 @@ import {
   type TipoTimbratura,
 } from "@/lib/timbrature";
 import { pulsanteSecondario, riquadro } from "../anagrafiche/stile";
+import PannelloCorrezioni from "./PannelloCorrezioni";
 
 type Persona = { id: string; nome_completo: string };
 type Riga = Timbratura & { dipendente_id: string };
@@ -72,7 +74,15 @@ function pause(t: Riga[]): string {
   return out.join(", ");
 }
 
-export default async function SchedaPresenze({ giorno: richiesto }: { giorno?: string }) {
+export default async function SchedaPresenze({
+  giorno: richiesto,
+  correggi,
+  puoCorreggere,
+}: {
+  giorno?: string;
+  correggi?: string;
+  puoCorreggere: boolean;
+}) {
   const oggi = oggiIt();
   const giorno = richiesto && /^\d{4}-\d{2}-\d{2}$/.test(richiesto) ? richiesto : oggi;
   const supabase = await creaClientServer();
@@ -195,10 +205,19 @@ export default async function SchedaPresenze({ giorno: richiesto }: { giorno?: s
               {righe.map(({ p, mie, g, stato, previsti, fasce, assenzeMie, avvisi }) => {
                 const entrata = mie.find((t) => t.tipo === "entrata");
                 const uscita = [...mie].reverse().find((t) => t.tipo === "uscita");
+                const aperto = puoCorreggere && correggi === p.id;
                 return (
-                  <tr key={p.id} className="border-b border-slate-100 align-top last:border-0">
+                  <Fragment key={p.id}>
+                  <tr className={`border-b border-slate-100 align-top last:border-0 ${aperto ? "bg-blue-50/60" : ""}`}>
                     <td className="px-4 py-3">
-                      <div className="font-semibold">{p.nome_completo}</div>
+                      <div className="flex flex-wrap items-baseline gap-x-2">
+                        <span className="font-semibold">{p.nome_completo}</span>
+                        {puoCorreggere && !aperto && adesso >= 0 && (
+                          <Link href={`${link(giorno)}&correggi=${p.id}`} className="text-xs font-semibold text-blue-700 hover:underline">
+                            Correggi
+                          </Link>
+                        )}
+                      </div>
                       <div className="text-xs text-slate-500">{fasce.length ? testoIntervalli(fasce) : "riposo"}</div>
                       {mie.length > 0 && (
                         <details className="mt-1 text-xs">
@@ -250,6 +269,14 @@ export default async function SchedaPresenze({ giorno: richiesto }: { giorno?: s
                       </ul>
                     </td>
                   </tr>
+                  {aperto && (
+                    <tr className="border-b border-slate-100">
+                      <td colSpan={7} className="px-4 pb-4">
+                        <PannelloCorrezioni dipendente={p.id} nome={p.nome_completo} giorno={giorno} />
+                      </td>
+                    </tr>
+                  )}
+                  </Fragment>
                 );
               })}
             </tbody>

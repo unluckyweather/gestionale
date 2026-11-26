@@ -2,7 +2,8 @@
 //   Timbra            → timbratura dal telefono, per chi è collegato a un dipendente (0013);
 //                       si apre su questa
 //   Presenze          → chi c'è, chi è in pausa, chi non ha timbrato (titolare, ufficio,
-//                       contabilità; ?scheda=presenze&giorno=<data>)
+//                       contabilità; ?scheda=presenze&giorno=<data>); titolare e ufficio
+//                       correggono (&correggi=<dipendente>: aggiungi o annulla, con il motivo)
 //   Ferie e permessi  → calendario di due settimane; il titolare registra e decide le richieste,
 //                       gli altri chiedono per sé (?scheda=ferie&dal=<data>, 0012)
 import Link from "next/link";
@@ -13,7 +14,7 @@ import SchedaAssenze from "./SchedaAssenze";
 import SchedaPresenze from "./SchedaPresenze";
 import SchedaTimbra from "./SchedaTimbra";
 
-type Parametri = { scheda?: string; dal?: string; giorno?: string; ok?: string; errore?: string };
+type Parametri = { scheda?: string; dal?: string; giorno?: string; correggi?: string; ok?: string; errore?: string };
 
 const SCHEDE = [
   { chiave: "timbra", etichetta: "Timbra" },
@@ -63,7 +64,11 @@ export default async function Timbrature({ searchParams }: { searchParams: Promi
       {scheda === "timbra" && mio ? (
         <SchedaTimbra dipendente={mio.id} />
       ) : scheda === "presenze" ? (
-        <SchedaPresenze giorno={p.giorno} />
+        <SchedaPresenze
+          giorno={p.giorno}
+          correggi={p.correggi}
+          puoCorreggere={io.ruolo === "titolare" || io.ruolo === "ufficio"}
+        />
       ) : (
         <SchedaAssenze dal={p.dal} titolare={io.ruolo === "titolare"} oggi={oggiIt()} />
       )}
