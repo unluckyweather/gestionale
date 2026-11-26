@@ -39,4 +39,4 @@ Dashboard (26/11/2026): fatta e provata su `gestionale-dev` come titolare e oper
 
 Prove con gli altri ruoli (26/11/2026): commesse (operaio, contabilità), «Il mio programma» (operaio), correzioni delle timbrature (ufficio, contabilità) fatte e superate su `gestionale-dev`. Trovato un errore: le correzioni dell'ufficio risultavano «arrivata dopo (senza rete)»; migrazione `0014_timbrature_arrivate_dopo.sql` scritta e provata in locale con PGlite (10 su 10), **da applicare su `gestionale-dev`**; su `gestionale-prod` no finché non lo dico io.
 
-Password dimenticata (26/11/2026): pagine fatte e provate su localhost, **senza migrazione**; restano da fare la configurazione di Supabase (URL e testo dell'email, vedi ARCHITETTURA.md) e la prova vera con l'email.
+Password dimenticata (26/11/2026): pagine fatte e provate su localhost, **senza migrazione**; URL configurati su Supabase (`gestionale-dev`, sito `https://gestionale-zeta-one.vercel.app`) e **provata con l'email vera** (26/11). Resta il testo italiano dell'email (link con `token_hash`, funziona anche su un altro dispositivo), da fare insieme alla casella aziendale (SMTP).
