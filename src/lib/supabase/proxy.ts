@@ -3,7 +3,8 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
-const PAGINE_PUBBLICHE = ["/login"];
+// /auth/conferma riceve il link dell'email «password dimenticata».
+const PAGINE_PUBBLICHE = ["/login", "/password-dimenticata", "/auth"];
 
 export async function aggiornaSessione(request: NextRequest) {
   let risposta = NextResponse.next({ request });

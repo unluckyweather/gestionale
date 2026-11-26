@@ -1,20 +1,29 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import ModuloLogin from "./ModuloLogin";
+import RiquadroAccesso from "@/components/RiquadroAccesso";
 
 export const metadata: Metadata = { title: "Accedi · Gestionale" };
 
-export default function PaginaLogin() {
+export default async function PaginaLogin({
+  searchParams,
+}: {
+  searchParams: Promise<{ errore?: string }>;
+}) {
+  const { errore } = await searchParams;
   return (
-    <div className="flex min-h-screen items-center justify-center p-4">
-      <div className="w-full max-w-sm rounded-xl border border-slate-200 bg-white p-8 shadow-sm">
-        <div className="mb-6 text-2xl font-bold text-slate-900">
-          Gestionale<span className="text-blue-400">.</span>
-        </div>
-        <h1 className="mb-1 text-lg font-semibold">Accedi</h1>
-        <p className="mb-6 text-sm text-slate-500">Usa l&apos;email e la password che ti ha dato il titolare.</p>
-        <ModuloLogin />
-        <p className="mt-6 text-xs text-slate-500">Password dimenticata? Chiedi al titolare di reimpostarla.</p>
-      </div>
-    </div>
+    <RiquadroAccesso titolo="Accedi" sottotitolo="Usa l'email e la password che ti ha dato il titolare.">
+      {errore === "link" && (
+        <p role="alert" className="mb-4 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-900">
+          Il link per la nuova password non è valido o è scaduto. Chiedine uno nuovo.
+        </p>
+      )}
+      <ModuloLogin />
+      <p className="mt-6 text-sm">
+        <Link href="/password-dimenticata" className="font-medium text-blue-700 hover:underline">
+          Password dimenticata?
+        </Link>
+      </p>
+    </RiquadroAccesso>
   );
 }

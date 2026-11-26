@@ -126,7 +126,7 @@ export default async function SchedaPresenze({
                                 {t.posizione === "fuori_zona" && ` · fuori zona ${distanzaTesto(t.distanza_m)}`}
                                 {t.posizione === "in_zona" && " · in zona"}
                                 {t.posizione === "non_disponibile" && " · senza posizione"}
-                                {new Date(t.ricevuta_il).getTime() - new Date(t.orario).getTime() > 600000 && ` · arrivata alle ${oraRoma(t.ricevuta_il)}`}
+                                {t.origine === "telefono" && new Date(t.ricevuta_il).getTime() - new Date(t.orario).getTime() > 600000 && ` · arrivata alle ${oraRoma(t.ricevuta_il)}`}
                               </li>
                             ))}
                           </ul>
