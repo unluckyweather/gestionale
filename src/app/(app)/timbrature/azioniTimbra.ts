@@ -10,7 +10,8 @@ import { TIPI_TIMBRATURA, type TipoTimbratura } from "@/lib/timbrature";
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export type Posizione = { lat: number; lon: number; precisione: number | null };
-export type EsitoTimbra = { ok?: string; errore?: string; esito?: string | null; distanza?: number | null };
+// definitivo: il database l'ha respinta (non ha senso rimandarla); altrimenti si può riprovare
+export type EsitoTimbra = { ok?: string; errore?: string; definitivo?: boolean; esito?: string | null; distanza?: number | null };
 
 const FATTO: Record<TipoTimbratura, string> = {
   entrata: "Entrata timbrata",
@@ -23,10 +24,20 @@ function numero(x: unknown): number | null {
   return typeof x === "number" && Number.isFinite(x) ? x : null;
 }
 
-export async function timbra(tipo: TipoTimbratura, idLocale: string, posizione: Posizione | null): Promise<EsitoTimbra> {
+/**
+ * orario: solo per le timbrature fatte senza rete e inviate dopo (ora del telefono, ISO);
+ * il database la accetta fino a 72 ore prima e la segna «arrivata dopo».
+ */
+export async function timbra(
+  tipo: TipoTimbratura,
+  idLocale: string,
+  posizione: Posizione | null,
+  orario?: string
+): Promise<EsitoTimbra> {
   await richiediUtente();
-  if (!TIPI_TIMBRATURA.includes(tipo)) return { errore: "Timbratura non valida." };
-  if (!UUID.test(idLocale)) return { errore: "Timbratura non valida: ricarica la pagina." };
+  if (!TIPI_TIMBRATURA.includes(tipo)) return { errore: "Timbratura non valida.", definitivo: true };
+  if (!UUID.test(idLocale)) return { errore: "Timbratura non valida: ricarica la pagina.", definitivo: true };
+  if (orario !== undefined && Number.isNaN(Date.parse(orario))) return { errore: "Ora della timbratura non valida.", definitivo: true };
 
   const lat = numero(posizione?.lat);
   const lon = numero(posizione?.lon);
@@ -37,9 +48,10 @@ export async function timbra(tipo: TipoTimbratura, idLocale: string, posizione: 
     p_lon: lon !== null && lon >= -180 && lon <= 180 ? lon : null,
     p_precisione: numero(posizione?.precisione),
     p_id_locale: idLocale,
+    p_orario: orario ?? null,
   });
   if (error) {
-    if (error.code === "P0001") return { errore: error.message };
+    if (error.code === "P0001") return { errore: error.message, definitivo: true };
     return { errore: "Timbratura non riuscita. Riprova tra poco." };
   }
 

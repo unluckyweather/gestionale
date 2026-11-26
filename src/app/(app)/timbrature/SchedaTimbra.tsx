@@ -18,7 +18,7 @@ export default async function SchedaTimbra({ dipendente }: { dipendente: string 
   const [risTimbrature, risControllo, risLavori] = await Promise.all([
     supabase
       .from("timbrature")
-      .select("id, tipo, orario, origine, ricevuta_il, posizione, distanza_m")
+      .select("id, tipo, orario, origine, ricevuta_il, posizione, distanza_m, id_locale")
       .eq("dipendente_id", dipendente)
       .eq("attivo", true)
       .gte("orario", da)
@@ -41,12 +41,12 @@ export default async function SchedaTimbra({ dipendente }: { dipendente: string 
     );
   }
 
-  const timbrature = ((risTimbrature.data ?? []) as Timbratura[]).filter((t) => giornoRoma(t.orario) === oggi);
+  const timbrature = ((risTimbrature.data ?? []) as (Timbratura & { id_locale: string | null })[]).filter((t) => giornoRoma(t.orario) === oggi);
   const lavori = (risLavori.data ?? []) as LavoroOggi[];
 
   return (
     <div className="flex w-full max-w-md flex-col gap-4">
-      <PulsantiTimbra timbrature={timbrature} controllo={risControllo.data === true} />
+      <PulsantiTimbra dipendente={dipendente} timbrature={timbrature} controllo={risControllo.data === true} />
 
       <section className={`${riquadro} p-4`}>
         <h2 className="mb-2 text-sm font-semibold">Oggi</h2>
